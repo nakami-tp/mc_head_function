@@ -1,5 +1,7 @@
 # Agent skills
 
+放在 `.agents/skills/`，这是 Cursor、Claude Code、Codex 和 `npx skills` 会自动读取的项目技能目录。根目录的 `agents/` 不会被加载。
+
 本仓库给其他 agent 用的 [Matt Pocock skills](https://github.com/mattpocock/skills) 全套副本。来源 `main`，提交 `3cca18b`（2026-09-04）。许可证见 [LICENSE](./LICENSE)。
 
 收入官方已发布的 **engineering / productivity / misc** 全部技能。未收入 `deprecated`（空）和 `in-progress`（未完成）。

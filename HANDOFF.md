@@ -56,6 +56,6 @@
 
 下一场代理开场应先读这些技能再提问或改文件：
 
-- grilling（`~/.claude/skills/grilling/SKILL.md`）— 按轮问完前沿，整轮一起问，等用户答完再问下一轮
-- domain-modeling（`~/.claude/skills/domain-modeling/SKILL.md`）— 词一定就改 `CONTEXT.md`；ADR 只在难回头、不写会困惑、真有取舍时才提议
-- grill-with-docs（`~/.agents/skills/grill-with-docs/SKILL.md`）— 若用户再次带需求文档追问，先挂上 grilling + domain-modeling
+- grilling（`.agents/skills/grilling/SKILL.md`）— 按轮问完前沿，整轮一起问，等用户答完再问下一轮
+- domain-modeling（`.agents/skills/domain-modeling/SKILL.md`）— 词一定就改 `CONTEXT.md`；ADR 只在难回头、不写会困惑、真有取舍时才提议
+- grill-with-docs（`.agents/skills/grill-with-docs/SKILL.md`）— 若用户再次带需求文档追问，先挂上 grilling + domain-modeling
