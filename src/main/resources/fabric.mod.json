@@ -3,7 +3,7 @@
 	"id": "mc_head_function",
 	"version": "${version}",
 	"name": "Mc Head Function",
-	"description": "A Fabric 1.21.1 mod.",
+	"description": "Heads you can behead, throw, wear, and use.",
 	"authors": [
 		"nakami"
 	],

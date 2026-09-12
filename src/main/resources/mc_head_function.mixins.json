@@ -3,7 +3,11 @@
 	"package": "com.nakami.mcheadfunction.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
-		"MinecraftServerMixin"
+		"EntityMixin",
+		"LivingEntityMixin",
+		"MobEntityMixin",
+		"PlayerEntityMixin",
+		"SculkSensorBlockEntityMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
