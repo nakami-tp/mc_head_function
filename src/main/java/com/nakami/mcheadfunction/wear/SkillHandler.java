@@ -8,6 +8,10 @@ import com.nakami.mcheadfunction.head.PlayerHeadAccess;
 import com.nakami.mcheadfunction.head.PlayerHeadState;
 import com.nakami.mcheadfunction.rule.HeadRules;
 import java.util.List;
+import com.nakami.mcheadfunction.head.HeadEffects;
+import com.nakami.mcheadfunction.head.HeadSounds;
+import net.minecraft.particle.DustParticleEffect;
+import org.joml.Vector3f;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -17,7 +21,6 @@ import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
-import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
@@ -35,6 +38,7 @@ public final class SkillHandler {
 
 	public static void onSkill(ServerPlayerEntity player, boolean pressed) {
 		PlayerHeadState state = PlayerHeadAccess.state(player);
+		boolean wasHeld = state.skillHeld;
 		state.skillHeld = pressed;
 		if (!pressed) {
 			return;
@@ -44,9 +48,15 @@ public final class SkillHandler {
 			return;
 		}
 		switch (worn.wearStyle) {
+			case BLAZE -> {
+				if (!wasHeld) HeadSounds.play(player, SoundEvents.ITEM_FIRECHARGE_USE, 0.4F, 0.95F);
+			}
 			case CHARGED_CREEPER -> lightning(player, state);
 			case CREEPER -> creeperAmmo(player, state);
-			case GOAT -> state.goatDashTicks = 12;
+			case GOAT -> {
+				if (state.goatDashTicks == 0) HeadSounds.launch(player, HeadType.GOAT);
+				state.startGoatDash(player.getPos());
+			}
 			case FROG -> grab(player, state);
 			case LLAMA -> spit(player, state);
 			default -> {
@@ -63,6 +73,8 @@ public final class SkillHandler {
 		if (target == null || target == player) {
 			return;
 		}
+		HeadEffects.line(player.getServerWorld(), player.getEyePos(), target.getEyePos(), net.minecraft.particle.ParticleTypes.ELECTRIC_SPARK);
+		HeadSounds.play(player, SoundEvents.BLOCK_RESPAWN_ANCHOR_DEPLETE.value(), 0.35F, 1.6F);
 		state.lightningCharge = 0;
 		ServerWorld world = player.getServerWorld();
 		var bolt = net.minecraft.entity.EntityType.LIGHTNING_BOLT.create(world);
@@ -88,6 +100,7 @@ public final class SkillHandler {
 		ammo.setPosition(player.getX(), player.getEyeY() - 0.1, player.getZ());
 		ammo.setVelocity(look.x, look.y, look.z, 1.2F, 1.0F);
 		world.spawnEntity(ammo);
+		HeadSounds.play(player, SoundEvents.ENTITY_SNOWBALL_THROW, 0.35F, 0.65F);
 		state.creeperCharges--;
 		state.lastAmmo = ammo.getUuid();
 	}
@@ -97,11 +110,17 @@ public final class SkillHandler {
 			return;
 		}
 		state.llamaCooldown = HeadRules.LLAMA_COOLDOWN_TICKS;
-		LivingEntity target = rayEntity(player, 16);
-		if (target != null && target != player) {
-			target.damage(player.getDamageSources().playerAttack(player), 1);
+		ServerWorld world = player.getServerWorld();
+		var spit = net.minecraft.entity.EntityType.LLAMA_SPIT.create(world);
+		if (spit == null) {
+			return;
 		}
-		player.getWorld().playSound(null, player.getBlockPos(), SoundEvents.ENTITY_LLAMA_SPIT, player.getSoundCategory(), 1.0F, 1.0F);
+		spit.setOwner(player);
+		Vec3d look = player.getRotationVec(1.0F);
+		spit.setPosition(player.getX(), player.getEyeY() - 0.1, player.getZ());
+		spit.setVelocity(look.x, look.y, look.z, 1.5F, 1.0F);
+		world.spawnEntity(spit);
+		HeadSounds.play(player, SoundEvents.ENTITY_LLAMA_SPIT, 0.35F, 1.15F);
 	}
 
 	private static void grab(ServerPlayerEntity player, PlayerHeadState state) {
@@ -112,6 +131,9 @@ public final class SkillHandler {
 		if (hit.getType() == HitResult.Type.MISS) {
 			return;
 		}
+		HeadEffects.line(player.getServerWorld(), player.getEyePos().add(0, -0.15, 0), hit.getPos(),
+			new DustParticleEffect(new Vector3f(0.95F, 0.35F, 0.48F), 0.8F));
+		HeadSounds.play(player, SoundEvents.ENTITY_FROG_TONGUE, 0.5F, 1.05F);
 		state.frogCooldown = HeadRules.FROG_COOLDOWN_TICKS;
 		ServerWorld world = player.getServerWorld();
 		if (hit instanceof EntityHitResult entityHit) {
@@ -134,21 +156,28 @@ public final class SkillHandler {
 			return;
 		}
 		if (hit instanceof BlockHitResult blockHit) {
-			BlockPos pos = blockHit.getBlockPos();
-			BlockState blockState = world.getBlockState(pos);
-			if (blockState.getHardness(world, pos) < 0 || blockState.isOf(Blocks.BEDROCK)) {
-				return;
+			grabBlock(player, world, blockHit.getBlockPos());
+		}
+	}
+
+	private static void grabBlock(ServerPlayerEntity player, ServerWorld world, BlockPos pos) {
+		BlockState blockState = world.getBlockState(pos);
+		if (blockState.isAir() || blockState.getHardness(world, pos) < 0 || blockState.isOf(Blocks.BEDROCK)) {
+			return;
+		}
+		BlockEntity blockEntity = world.getBlockEntity(pos);
+		if (blockEntity instanceof net.minecraft.inventory.Inventory inventory) {
+			for (int i = 0; i < inventory.size(); i++) {
+				giveOrDrop(player, inventory.removeStack(i));
 			}
-			BlockEntity blockEntity = world.getBlockEntity(pos);
-			boolean container = blockEntity instanceof net.minecraft.inventory.Inventory || blockState.isIn(BlockTags.SHULKER_BOXES)
-				|| blockState.isOf(Blocks.CHEST) || blockState.isOf(Blocks.TRAPPED_CHEST) || blockState.isOf(Blocks.BARREL);
-			if (container || blockState.isSolid()) {
-				List<ItemStack> drops = Block.getDroppedStacks(blockState, world, pos, blockEntity, player, ItemStack.EMPTY);
-				world.breakBlock(pos, false, player);
-				for (ItemStack drop : drops) {
-					giveOrDrop(player, drop);
-				}
-			}
+		}
+		List<ItemStack> drops = List.of();
+		if (!blockState.isToolRequired()) {
+			drops = Block.getDroppedStacks(blockState, world, pos, blockEntity, player, ItemStack.EMPTY);
+		}
+		world.breakBlock(pos, false, player);
+		for (ItemStack drop : drops) {
+			giveOrDrop(player, drop);
 		}
 	}
 

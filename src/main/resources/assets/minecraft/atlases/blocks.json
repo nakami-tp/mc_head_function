@@ -1,0 +1,99 @@
+{
+  "sources": [
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/armadillo",
+      "sprite": "minecraft:entity/armadillo"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/bat",
+      "sprite": "minecraft:entity/bat"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/bee/bee",
+      "sprite": "minecraft:entity/bee/bee"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/blaze",
+      "sprite": "minecraft:entity/blaze"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/chicken",
+      "sprite": "minecraft:entity/chicken"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/cow/cow",
+      "sprite": "minecraft:entity/cow/cow"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/creeper/creeper",
+      "sprite": "minecraft:entity/creeper/creeper"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/creeper/creeper_armor",
+      "sprite": "minecraft:entity/creeper/creeper_armor"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/enderman/enderman",
+      "sprite": "minecraft:entity/enderman/enderman"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/enderman/enderman_eyes",
+      "sprite": "minecraft:entity/enderman/enderman_eyes"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/fox/fox",
+      "sprite": "minecraft:entity/fox/fox"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/frog/temperate_frog",
+      "sprite": "minecraft:entity/frog/temperate_frog"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/goat/goat",
+      "sprite": "minecraft:entity/goat/goat"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/iron_golem/iron_golem",
+      "sprite": "minecraft:entity/iron_golem/iron_golem"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/llama/creamy",
+      "sprite": "minecraft:entity/llama/creamy"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/pig/pig",
+      "sprite": "minecraft:entity/pig/pig"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/rabbit/brown",
+      "sprite": "minecraft:entity/rabbit/brown"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/sheep/sheep",
+      "sprite": "minecraft:entity/sheep/sheep"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:entity/wolf/wolf",
+      "sprite": "minecraft:entity/wolf/wolf"
+    }
+  ]
+}

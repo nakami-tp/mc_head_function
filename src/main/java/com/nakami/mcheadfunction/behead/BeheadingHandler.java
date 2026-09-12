@@ -2,6 +2,7 @@ package com.nakami.mcheadfunction.behead;
 
 import com.nakami.mcheadfunction.head.HeadLookups;
 import com.nakami.mcheadfunction.head.HeadType;
+import com.nakami.mcheadfunction.head.HeadSounds;
 import com.nakami.mcheadfunction.head.HeadlessAccess;
 import com.nakami.mcheadfunction.rule.BeheadingTracker;
 import com.nakami.mcheadfunction.rule.HeadRules;
@@ -11,7 +12,6 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.Box;
@@ -33,7 +33,7 @@ public final class BeheadingHandler {
 		}
 		player.swingHand(player.getActiveHand());
 		if (player.getWorld() instanceof ServerWorld world) {
-			world.playSound(null, target.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_WEAK, SoundCategory.PLAYERS, 0.8F, 1.4F);
+			HeadSounds.play(target, SoundEvents.ENTITY_PLAYER_ATTACK_WEAK, 0.45F, 1.15F);
 			world.spawnParticles(ParticleTypes.CRIT, target.getX(), target.getEyeY(), target.getZ(), 6, 0.15, 0.15, 0.15, 0.02);
 		}
 		boolean done = TRACKER.registerHit(player.getUuid(), target.getUuid(), player.getWorld().getTime() * 50L);
@@ -50,9 +50,7 @@ public final class BeheadingHandler {
 		}
 		HeadlessAccess.setHeadless(target, true);
 		ThrowHandler.knockOff(player, type);
-		if (player.getWorld() instanceof ServerWorld world) {
-			world.playSound(null, target.getBlockPos(), SoundEvents.ENTITY_WITHER_SKELETON_AMBIENT, SoundCategory.PLAYERS, 0.5F, 1.8F);
-		}
+		HeadSounds.play(target, SoundEvents.ENTITY_PLAYER_ATTACK_STRONG, 0.55F, 0.85F);
 	}
 
 	public static boolean aimingAtHead(PlayerEntity player, LivingEntity target) {

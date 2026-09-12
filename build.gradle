@@ -39,6 +39,14 @@ test {
 	useJUnitPlatform()
 }
 
+fabricApi {
+	configureTests {
+		createSourceSet = true
+		modId = "mc_head_function_test"
+		eula = true
+	}
+}
+
 processResources {
 	inputs.property "version", project.version
 

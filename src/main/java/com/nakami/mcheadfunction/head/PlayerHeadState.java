@@ -1,8 +1,13 @@
 package com.nakami.mcheadfunction.head;
 
 import com.nakami.mcheadfunction.rule.HeadRules;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.util.math.Vec3d;
 
 public final class PlayerHeadState {
 	public int creeperCharges = HeadRules.CREEPER_MAX_CHARGES;
@@ -12,6 +17,9 @@ public final class PlayerHeadState {
 	public int llamaCooldown;
 	public int endermanDodgeCooldown;
 	public int goatDashTicks;
+	public Vec3d goatDashOrigin;
+	public final Set<UUID> goatHit = new HashSet<>();
+	public final Map<UUID, Integer> wolfFleeRemaining = new HashMap<>();
 	public boolean skillHeld;
 	public UUID markedTarget;
 	public UUID lastAmmo;
@@ -39,7 +47,22 @@ public final class PlayerHeadState {
 		}
 		if (goatDashTicks > 0) {
 			goatDashTicks--;
+			if (goatDashTicks == 0) {
+				clearGoatDash();
+			}
 		}
+	}
+
+	public void startGoatDash(Vec3d origin) {
+		goatDashTicks = 40;
+		goatDashOrigin = origin;
+		goatHit.clear();
+	}
+
+	public void clearGoatDash() {
+		goatDashTicks = 0;
+		goatDashOrigin = null;
+		goatHit.clear();
 	}
 
 	public void write(NbtCompound nbt) {

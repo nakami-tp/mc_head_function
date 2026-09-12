@@ -1,6 +1,8 @@
 package com.nakami.mcheadfunction.entity;
 
 import java.util.UUID;
+import com.nakami.mcheadfunction.head.HeadSounds;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
@@ -45,6 +47,7 @@ public class HeadAmmoEntity extends ThrownItemEntity {
 		if (getWorld().isClient()) {
 			return;
 		}
+		if (!planted) HeadSounds.play(this, SoundEvents.BLOCK_STONE_HIT, 0.4F, 0.85F);
 		setVelocity(Vec3d.ZERO);
 		setNoGravity(true);
 		planted = true;
@@ -54,6 +57,7 @@ public class HeadAmmoEntity extends ThrownItemEntity {
 	public void tick() {
 		super.tick();
 		if (getWorld().isClient()) {
+			if (age % 2 == 0) getWorld().addParticle(net.minecraft.particle.ParticleTypes.SMOKE, getX(), getY() + 0.35, getZ(), 0, 0.02, 0);
 			return;
 		}
 		if (isInLava() || getY() < getWorld().getBottomY() - 16) {
@@ -62,6 +66,9 @@ public class HeadAmmoEntity extends ThrownItemEntity {
 		}
 		if (planted) {
 			plantTicks++;
+			if (plantTicks == 1 || plantTicks == 160 || plantTicks == 180 || plantTicks == 190) {
+				HeadSounds.play(this, SoundEvents.BLOCK_DISPENSER_FAIL, 0.18F, 0.8F + plantTicks / 200F);
+			}
 			if (plantTicks > 200) {
 				detonate();
 			}
@@ -72,14 +79,24 @@ public class HeadAmmoEntity extends ThrownItemEntity {
 		if (!(getWorld() instanceof ServerWorld world) || isRemoved()) {
 			return;
 		}
-		world.createExplosion(this, getX(), getY(), getZ(), 2.0F, World.ExplosionSourceType.NONE);
+		java.util.UUID ownerId = getOwner() != null ? getOwner().getUuid() : null;
+		world.createExplosion(
+			this,
+			world.getDamageSources().explosion(this, getOwner()),
+			new OwnerSafeExplosionBehavior(ownerId, true),
+			getX(),
+			getY(),
+			getZ(),
+			2.0F,
+			false,
+			World.ExplosionSourceType.NONE
+		);
 		if (getOwner() instanceof PlayerEntity player) {
 			Vec3d push = player.getPos().subtract(getPos());
 			if (push.lengthSquared() < 64) {
 				Vec3d knock = push.normalize().multiply(1.6).add(0, 0.55, 0);
 				player.addVelocity(knock.x, knock.y, knock.z);
 				player.velocityModified = true;
-				player.hurtTime = 0;
 			}
 		}
 		discard();

@@ -1,11 +1,13 @@
 package com.nakami.mcheadfunction.mixin;
 
 import com.nakami.mcheadfunction.head.HeadlessAccess;
+import com.nakami.mcheadfunction.rule.HeadRules;
 import com.nakami.mcheadfunction.wear.WearHandler;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.registry.tag.DamageTypeTags;
 import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
 import net.minecraft.entity.data.TrackedDataHandlerRegistry;
@@ -26,6 +28,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class LivingEntityMixin extends Entity implements HeadlessAccess {
 	@Unique
 	private static final TrackedData<Boolean> MHF_HEADLESS = DataTracker.registerData(LivingEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
+
+	@Unique
+	private float mhf$healthBeforeDamage;
 
 	protected LivingEntityMixin(EntityType<?> type, World world) {
 		super(type, world);
@@ -79,12 +84,21 @@ public abstract class LivingEntityMixin extends Entity implements HeadlessAccess
 		return amount;
 	}
 
+	@Inject(method = "applyDamage", at = @At("HEAD"))
+	private void mhf$beforeApplyDamage(DamageSource source, float amount, CallbackInfo ci) {
+		LivingEntity self = (LivingEntity) (Object) this;
+		mhf$healthBeforeDamage = self.getHealth();
+	}
+
 	@Inject(method = "applyDamage", at = @At("RETURN"))
 	private void mhf$afterDamage(DamageSource source, float amount, CallbackInfo ci) {
 		LivingEntity self = (LivingEntity) (Object) this;
-		if (source.getAttacker() instanceof ServerPlayerEntity player) {
-			WearHandler.onDealtDamage(player, self, amount, !self.isAlive());
+		if (!(source.getAttacker() instanceof ServerPlayerEntity player)) {
+			return;
 		}
+		float lost = Math.max(0.0F, mhf$healthBeforeDamage - self.getHealth());
+		boolean melee = HeadRules.isMeleeHit(source.isDirect(), source.isIn(DamageTypeTags.IS_PROJECTILE));
+		WearHandler.onDealtDamage(player, self, lost, !self.isAlive(), melee);
 	}
 
 	@ModifyVariable(method = "addStatusEffect(Lnet/minecraft/entity/effect/StatusEffectInstance;Lnet/minecraft/entity/Entity;)Z", at = @At("HEAD"), argsOnly = true)

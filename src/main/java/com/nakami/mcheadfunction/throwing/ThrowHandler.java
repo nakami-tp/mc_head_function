@@ -6,8 +6,7 @@ import com.nakami.mcheadfunction.head.HeadType;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvents;
+import com.nakami.mcheadfunction.head.HeadSounds;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
@@ -25,7 +24,7 @@ public final class ThrowHandler {
 		if (!player.getAbilities().creativeMode) {
 			stack.decrement(1);
 		}
-		player.getWorld().playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.ENTITY_SNOWBALL_THROW, SoundCategory.PLAYERS, 0.6F, 0.9F);
+		HeadSounds.launch(player, type);
 	}
 
 	public static void knockOff(PlayerEntity player, HeadType type) {
@@ -51,5 +50,8 @@ public final class ThrowHandler {
 			thrown.setNoGravity(style != HeadType.ThrowStyle.KNOCK_OFF && style != HeadType.ThrowStyle.ZOMBIE_HOP && style != HeadType.ThrowStyle.GOLEM_ROLL);
 		}
 		world.spawnEntity(thrown);
+		if (style == HeadType.ThrowStyle.BAT_SONAR && thrown.getWorld() instanceof net.minecraft.server.world.ServerWorld) {
+			thrown.releaseSonar();
+		}
 	}
 }
