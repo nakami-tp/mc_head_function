@@ -1,6 +1,6 @@
 # 交接：头部功能模组
 
-设计追问已确认共同理解（Q45=A）。第一期玩法已落到 Fabric 1.21.1。实现以 [CONTEXT.md](./CONTEXT.md)、本文件拍板和 [docs/adr/0001-reuse-vanilla-heads.md](./docs/adr/0001-reuse-vanilla-heads.md) 为准。
+设计追问已确认共同理解（Q45=A）。第一期玩法已落到 Fabric 1.21.1。规格见 [docs/spec.md](./docs/spec.md)。实现以规格、[CONTEXT.md](./CONTEXT.md)、本文件拍板和 [docs/adr/0001-reuse-vanilla-heads.md](./docs/adr/0001-reuse-vanilla-heads.md) 为准。
 
 ## 下一场先做什么
 
