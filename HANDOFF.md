@@ -1,10 +1,10 @@
 # 交接：头部功能模组
 
-设计追问已确认共同理解（Q45=A）。实现以 [CONTEXT.md](./CONTEXT.md)、本文件拍板和 [docs/adr/0001-reuse-vanilla-heads.md](./docs/adr/0001-reuse-vanilla-heads.md) 为准。
+设计追问已确认共同理解（Q45=A）。第一期玩法已落到 Fabric 1.21.1。实现以 [CONTEXT.md](./CONTEXT.md)、本文件拍板和 [docs/adr/0001-reuse-vanilla-heads.md](./docs/adr/0001-reuse-vanilla-heads.md) 为准。
 
 ## 下一场先做什么
 
-按拍板在 Fabric 1.21.1 上实现或补测。不要把「头」做成原版僵尸头 / 苦力怕头的第二套物品。
+进游戏手感测试并调数字。不要把「头」做成原版僵尸头 / 苦力怕头的第二套物品。创造物品栏有「头部功能」分组。头技默认 R。
 
 ## 已经拍板、但词表没写全的决定
 
