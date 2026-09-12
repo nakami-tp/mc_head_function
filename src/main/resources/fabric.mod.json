@@ -1,0 +1,35 @@
+{
+	"schemaVersion": 1,
+	"id": "mc_head_function",
+	"version": "${version}",
+	"name": "Mc Head Function",
+	"description": "A Fabric 1.21.1 mod.",
+	"authors": [
+		"nakami"
+	],
+	"contact": {},
+	"license": "MIT",
+	"icon": "assets/mc_head_function/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.nakami.mcheadfunction.McHeadFunction"
+		],
+		"client": [
+			"com.nakami.mcheadfunction.client.McHeadFunctionClient"
+		]
+	},
+	"mixins": [
+		"mc_head_function.mixins.json",
+		{
+			"config": "mc_head_function.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.16.14",
+		"minecraft": "~1.21.1",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
