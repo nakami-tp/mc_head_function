@@ -3,6 +3,8 @@
 	"package": "com.nakami.mcheadfunction.client.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
+		"AnimalModelAccessor",
+		"LivingEntityRendererMixin",
 		"MinecraftClientMixin"
 	],
 	"injectors": {
