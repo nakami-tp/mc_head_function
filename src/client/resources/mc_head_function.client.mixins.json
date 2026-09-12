@@ -5,7 +5,9 @@
 	"client": [
 		"AnimalModelAccessor",
 		"LivingEntityRendererMixin",
-		"MinecraftClientMixin"
+		"MinecraftClientMixin",
+		"ModelPartAccessor",
+		"HeadFeatureRendererMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

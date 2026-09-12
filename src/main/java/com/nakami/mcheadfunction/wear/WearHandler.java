@@ -6,6 +6,11 @@ import com.nakami.mcheadfunction.head.PlayerHeadAccess;
 import com.nakami.mcheadfunction.head.PlayerHeadState;
 import com.nakami.mcheadfunction.rule.HeadRules;
 import java.util.UUID;
+import com.nakami.mcheadfunction.head.HeadEffects;
+import com.nakami.mcheadfunction.head.HeadSounds;
+import com.nakami.mcheadfunction.net.HeadStatusS2CPayload;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.particle.ParticleTypes;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
@@ -42,13 +47,35 @@ public final class WearHandler {
 		boolean storm = world.isThundering();
 		for (ServerPlayerEntity player : world.getPlayers()) {
 			PlayerHeadState state = PlayerHeadAccess.state(player);
-			state.tick(storm);
 			HeadType worn = HeadLookups.worn(player);
+			int previousCharges = state.creeperCharges;
+			int previousLightning = state.lightningCharge;
+			int previousDodge = state.endermanDodgeCooldown;
+			state.tick(storm);
+			if (worn == HeadType.CREEPER && state.creeperCharges > previousCharges) {
+				HeadSounds.ready(player, worn, state.creeperCharges == HeadRules.CREEPER_MAX_CHARGES);
+			} else if (worn == HeadType.CHARGED_CREEPER && previousLightning < HeadRules.lightningChargeNeeded(storm)
+				&& state.lightningCharge >= HeadRules.lightningChargeNeeded(storm)) {
+				HeadSounds.ready(player, worn, true);
+			} else if (worn == HeadType.ENDERMAN && previousDodge == 1) {
+				HeadSounds.ready(player, worn, true);
+			}
 			applyPassives(player, worn);
 			tickGoatDash(player, state);
 			tickBlazeSpray(player, worn, state);
 			tickWolfThreat(world, player, worn);
 			tickBees(world, player, worn);
+			if (worn != null && player.age % 2 == 0) {
+				ServerPlayNetworking.send(player, new HeadStatusS2CPayload(state.creeperCharges, state.creeperRecharge,
+					state.lightningCharge, state.frogCooldown, state.llamaCooldown, state.endermanDodgeCooldown,
+					(worn == HeadType.BLAZE && state.skillHeld) || state.goatDashTicks > 0));
+			}
+			if (worn == HeadType.ARMADILLO && player.isSneaking() && player.age % 12 == 0) {
+				HeadEffects.ring(world, player.getPos(), 0.55);
+			}
+			if (worn == HeadType.CHICKEN && player.getVelocity().y < -0.05 && player.age % 5 == 0) {
+				world.spawnParticles(ParticleTypes.CLOUD, player.getX(), player.getY(), player.getZ(), 2, 0.3, 0, 0.3, 0.01);
+			}
 		}
 	}
 
@@ -102,14 +129,30 @@ public final class WearHandler {
 		if (state.goatDashTicks <= 0) {
 			return;
 		}
+		if (HeadLookups.worn(player) != HeadType.GOAT) {
+			state.clearGoatDash();
+			return;
+		}
+		if (state.goatDashOrigin != null) {
+			double traveled = player.getPos().subtract(state.goatDashOrigin).horizontalLength();
+			if (traveled >= HeadRules.GOAT_DASH_DISTANCE) {
+				state.clearGoatDash();
+				return;
+			}
+		}
+		if (player.age % 2 == 0) HeadEffects.burst(player.getServerWorld(), player.getPos(), HeadType.GOAT);
 		Vec3d look = player.getRotationVec(1.0F);
 		player.addVelocity(look.x * 0.35, 0, look.z * 0.35);
 		player.velocityModified = true;
 		Box box = player.getBoundingBox().expand(0.6);
 		for (LivingEntity living : player.getWorld().getEntitiesByClass(LivingEntity.class, box, e -> e != player && e.isAlive())) {
+			if (!state.goatHit.add(living.getUuid())) {
+				continue;
+			}
 			living.addVelocity(look.x * 1.2, 0.75, look.z * 1.2);
 			living.velocityModified = true;
 			living.damage(player.getDamageSources().playerAttack(player), 3);
+			HeadSounds.play(living, net.minecraft.sound.SoundEvents.ENTITY_GOAT_RAM_IMPACT, 0.5F, 0.85F);
 		}
 	}
 
@@ -125,6 +168,10 @@ public final class WearHandler {
 			}
 		}
 		var hit = player.getWorld().raycast(new net.minecraft.world.RaycastContext(start, end, net.minecraft.world.RaycastContext.ShapeType.COLLIDER, net.minecraft.world.RaycastContext.FluidHandling.NONE, player));
+		if (player.age % 2 == 0) {
+			HeadEffects.line(player.getServerWorld(), start.add(player.getRotationVec(1).multiply(0.6)), hit.getPos(), ParticleTypes.FLAME);
+		}
+		if (player.age % 30 == 0) HeadSounds.play(player, net.minecraft.sound.SoundEvents.BLOCK_FIRE_AMBIENT, 0.18F, 1.1F);
 		if (hit.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK) {
 			var pos = hit.getBlockPos().offset(hit.getSide());
 			if (player.getWorld().getBlockState(pos).isAir()) {
@@ -134,16 +181,26 @@ public final class WearHandler {
 	}
 
 	private static void tickWolfThreat(ServerWorld world, ServerPlayerEntity player, HeadType worn) {
+		PlayerHeadState state = PlayerHeadAccess.state(player);
 		if (worn != HeadType.WOLF) {
+			state.wolfFleeRemaining.clear();
 			return;
 		}
 		Box box = player.getBoundingBox().expand(HeadRules.SONAR_RANGE);
+		java.util.Set<java.util.UUID> seen = new java.util.HashSet<>();
 		for (SkeletonEntity skeleton : world.getEntitiesByClass(SkeletonEntity.class, box, LivingEntity::isAlive)) {
+			seen.add(skeleton.getUuid());
+			int left = state.wolfFleeRemaining.getOrDefault(skeleton.getUuid(), HeadRules.WOLF_FLEE_TICKS);
+			if (left <= 0) {
+				continue;
+			}
 			Vec3d away = skeleton.getPos().subtract(player.getPos()).normalize().multiply(0.35);
 			skeleton.setTarget(null);
 			skeleton.addVelocity(away.x, 0.05, away.z);
 			skeleton.velocityModified = true;
+			state.wolfFleeRemaining.put(skeleton.getUuid(), left - 1);
 		}
+		state.wolfFleeRemaining.keySet().removeIf(id -> !seen.contains(id));
 	}
 
 	private static void tickBees(ServerWorld world, ServerPlayerEntity player, HeadType worn) {
@@ -169,27 +226,42 @@ public final class WearHandler {
 				player.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, 200, 0));
 				player.addStatusEffect(new StatusEffectInstance(StatusEffects.HASTE, 200, 0));
 				player.heal(2.0F);
+				if (player.getWorld() instanceof ServerWorld world) world.spawnParticles(ParticleTypes.HEART, player.getX(), player.getEyeY(), player.getZ(), 3, 0.3, 0.2, 0.3, 0);
 			} else if (food != null) {
 				player.addStatusEffect(new StatusEffectInstance(StatusEffects.POISON, 60, 0));
 			}
 		}
 		if (worn == HeadType.PIG && food != null) {
-			player.getHungerManager().add(0, 2.0F);
+			var hunger = player.getHungerManager();
+			float extra = HeadRules.extraPigSaturation(food.saturation());
+			hunger.setSaturationLevel(Math.min(hunger.getFoodLevel(), hunger.getSaturationLevel() + extra));
+			if (player.getWorld() instanceof ServerWorld world) world.spawnParticles(ParticleTypes.HAPPY_VILLAGER, player.getX(), player.getEyeY(), player.getZ(), 5, 0.3, 0.2, 0.3, 0);
 		}
 	}
 
-	public static void onDealtDamage(ServerPlayerEntity player, LivingEntity victim, float amount, boolean killed) {
+	public static void onDealtDamage(ServerPlayerEntity player, LivingEntity victim, float amount, boolean killed, boolean melee) {
 		HeadType worn = HeadLookups.worn(player);
-		if (worn == HeadType.ZOMBIE) {
+		if (worn == HeadType.ZOMBIE && melee && amount > 0) {
 			player.heal(amount * 0.10F);
 			if (killed) {
 				player.heal(6.0F);
 			}
 		}
 		if (worn == HeadType.WOLF) {
-			PlayerHeadAccess.state(player).markedTarget = victim.getUuid();
-			victim.addStatusEffect(new StatusEffectInstance(StatusEffects.GLOWING, 200, 0, true, false, false));
+			markWolfTarget(player, victim);
 		}
+	}
+
+	private static void markWolfTarget(ServerPlayerEntity player, LivingEntity victim) {
+		PlayerHeadState state = PlayerHeadAccess.state(player);
+		if (state.markedTarget != null && !state.markedTarget.equals(victim.getUuid()) && player.getWorld() instanceof ServerWorld world) {
+			if (world.getEntity(state.markedTarget) instanceof LivingEntity previous) {
+				previous.removeStatusEffect(StatusEffects.GLOWING);
+			}
+		}
+		state.markedTarget = victim.getUuid();
+		player.getServerWorld().spawnParticles(ParticleTypes.CRIT, victim.getX(), victim.getEyeY(), victim.getZ(), 8, 0.2, 0.2, 0.2, 0.04);
+		victim.addStatusEffect(new StatusEffectInstance(StatusEffects.GLOWING, 200, 0, true, false, false));
 	}
 
 	public static boolean tryEndermanDodge(ServerPlayerEntity player) {
@@ -200,20 +272,22 @@ public final class WearHandler {
 		if (state.endermanDodgeCooldown > 0) {
 			return false;
 		}
-		state.endermanDodgeCooldown = HeadRules.ENDERMAN_DODGE_COOLDOWN_TICKS;
-		Vec3d look = player.getRotationVec(1.0F);
-		for (int i = 0; i < 8; i++) {
+		double distance = HeadRules.ENDERMAN_DODGE_DISTANCE;
+		for (int i = 0; i < 16; i++) {
 			double yaw = player.getRandom().nextDouble() * Math.PI * 2;
-			double x = player.getX() + Math.cos(yaw) * 6;
-			double z = player.getZ() + Math.sin(yaw) * 6;
+			double x = player.getX() + Math.cos(yaw) * distance;
+			double z = player.getZ() + Math.sin(yaw) * distance;
 			double y = player.getY();
+			Vec3d origin = player.getPos();
 			if (player.teleport(x, y, z, true)) {
+				HeadEffects.burst(player.getServerWorld(), origin, HeadType.ENDERMAN);
+				HeadEffects.burst(player.getServerWorld(), player.getPos(), HeadType.ENDERMAN);
+				state.endermanDodgeCooldown = HeadRules.ENDERMAN_DODGE_COOLDOWN_TICKS;
 				player.getWorld().playSound(null, player.getBlockPos(), net.minecraft.sound.SoundEvents.ENTITY_ENDERMAN_TELEPORT, player.getSoundCategory(), 1.0F, 1.0F);
 				return true;
 			}
 		}
-		player.teleport(player.getX() - look.x * 6, player.getY(), player.getZ() - look.z * 6, true);
-		return true;
+		return false;
 	}
 
 	public static boolean reduceIncoming(ServerPlayerEntity player, net.minecraft.entity.damage.DamageSource source, float amount) {

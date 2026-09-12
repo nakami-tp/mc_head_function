@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "mc_head_function_test",
+  "version": "1.0.0",
+  "name": "Head gameplay regression tests",
+  "entrypoints": {
+    "fabric-gametest": ["com.nakami.mcheadfunction.HeadGameplayTest"]
+  }
+}

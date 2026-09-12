@@ -54,7 +54,7 @@ public abstract class PlayerEntityMixin implements PlayerHeadAccess {
 		}
 	}
 
-	@Inject(method = "eatFood", at = @At("HEAD"))
+	@Inject(method = "eatFood", at = @At("RETURN"))
 	private void mhf$eat(World world, ItemStack stack, FoodComponent food, CallbackInfoReturnable<ItemStack> cir) {
 		WearHandler.onEat((PlayerEntity) (Object) this, stack, food);
 	}

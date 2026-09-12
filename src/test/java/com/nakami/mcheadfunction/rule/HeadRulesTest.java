@@ -34,4 +34,54 @@ class HeadRulesTest {
 		assertTrue(HeadRules.isThrower(id, id));
 		assertFalse(HeadRules.isThrower(id, UUID.fromString("00000000-0000-0000-0000-000000000008")));
 	}
+
+	@Test
+	void pigSaturationBonusUsesTheFoodsSaturation() {
+		assertEquals(6.0F, HeadRules.extraPigSaturation(6.0F));
+		assertEquals(0.0F, HeadRules.extraPigSaturation(0.0F));
+	}
+
+	@Test
+	void sheepQuietsWhenFarFromSensor() {
+		assertFalse(HeadRules.sheepQuiets(1.0));
+		assertTrue(HeadRules.sheepQuiets(4.01));
+	}
+
+	@Test
+	void meleeHitIgnoresProjectiles() {
+		assertTrue(HeadRules.isMeleeHit(true, false));
+		assertFalse(HeadRules.isMeleeHit(false, false));
+		assertFalse(HeadRules.isMeleeHit(true, true));
+	}
+
+	@Test
+	void endermanEatsFourTimesPerSecond() {
+		assertFalse(HeadRules.shouldEatThisTick(1));
+		assertTrue(HeadRules.shouldEatThisTick(5));
+		assertFalse(HeadRules.shouldEatThisTick(6));
+		assertTrue(HeadRules.shouldEatThisTick(10));
+	}
+
+	@Test
+	void connectedCollectIgnoresVisitedAirWhenCapping() {
+		record Cell(int x, int y) {
+		}
+		java.util.Set<Cell> stone = new java.util.HashSet<>();
+		for (int x = 0; x < 20; x++) {
+			stone.add(new Cell(x, 0));
+		}
+		var found = HeadRules.collectConnected(
+			new Cell(0, 0),
+			HeadRules.ENDERMAN_EAT_MAX,
+			stone::contains,
+			cell -> java.util.List.of(
+				new Cell(cell.x + 1, cell.y),
+				new Cell(cell.x - 1, cell.y),
+				new Cell(cell.x, cell.y + 1),
+				new Cell(cell.x, cell.y - 1)
+			)
+		);
+		assertEquals(16, found.size());
+		assertTrue(found.contains(new Cell(15, 0)));
+	}
 }

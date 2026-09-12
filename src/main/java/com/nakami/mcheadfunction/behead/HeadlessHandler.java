@@ -19,8 +19,6 @@ public final class HeadlessHandler {
 	private static void tickWorld(ServerWorld world) {
 		for (var entity : world.iterateEntities()) {
 			if (entity instanceof MobEntity mob && HeadlessAccess.isHeadless(mob)) {
-				mob.setTarget(null);
-				mob.setAttacking(false);
 				if (world.getTime() % 8 == 0) {
 					world.spawnParticles(
 						new BlockStateParticleEffect(ParticleTypes.BLOCK, Blocks.REDSTONE_BLOCK.getDefaultState()),
