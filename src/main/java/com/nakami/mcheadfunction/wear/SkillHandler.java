@@ -1,6 +1,7 @@
 package com.nakami.mcheadfunction.wear;
 
 import com.nakami.mcheadfunction.entity.HeadAmmoEntity;
+import com.nakami.mcheadfunction.entity.FrogTongueEntity;
 import com.nakami.mcheadfunction.head.HeadLookups;
 import com.nakami.mcheadfunction.head.HeadType;
 import com.nakami.mcheadfunction.head.HeadlessAccess;
@@ -11,24 +12,14 @@ import java.util.List;
 import com.nakami.mcheadfunction.progression.HeadMastery;
 import com.nakami.mcheadfunction.head.HeadEffects;
 import com.nakami.mcheadfunction.head.HeadSounds;
-import net.minecraft.particle.DustParticleEffect;
-import org.joml.Vector3f;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
-import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
@@ -127,81 +118,16 @@ public final class SkillHandler {
 	}
 
 	private static void grab(ServerPlayerEntity player, PlayerHeadState state) {
-		if (state.frogCooldown > 0) {
-			return;
-		}
+		if (state.frogCooldown > 0 || !player.getServerWorld().getEntitiesByClass(
+			FrogTongueEntity.class, player.getBoundingBox().expand(32),
+			tongue -> tongue.owner() == player).isEmpty()) return;
 		HitResult hit = rayAnything(player, HeadRules.FROG_RANGE);
-		if (hit.getType() == HitResult.Type.MISS) {
-			return;
-		}
-		HeadEffects.line(player.getServerWorld(), player.getEyePos().add(0, -0.15, 0), hit.getPos(),
-			new DustParticleEffect(new Vector3f(0.95F, 0.35F, 0.48F), 0.8F));
-		HeadSounds.play(player, SoundEvents.ENTITY_FROG_TONGUE, 0.5F, 1.05F);
-		state.frogCooldown = HeadMastery.mastered(player, HeadType.FROG) ? 10 : HeadRules.FROG_COOLDOWN_TICKS;
-		ServerWorld world = player.getServerWorld();
-		if (hit instanceof EntityHitResult entityHit) {
-			Entity entity = entityHit.getEntity();
-			if (entity instanceof PlayerEntity && entity != player) {
-				pull(entity, player);
-				HeadMastery.practice(player, HeadType.FROG);
-				return;
-			}
-			if (entity instanceof LivingEntity living) {
-				if (living == player || HeadLookups.isBoss(living)) {
-					return;
-				}
-				pull(living, player);
-				HeadMastery.practice(player, HeadType.FROG);
-				return;
-			}
-			if (entity instanceof ItemEntity item) {
-				giveOrDrop(player, item.getStack());
-				HeadMastery.practice(player, HeadType.FROG);
-				item.discard();
-			}
-			return;
-		}
-		if (hit instanceof BlockHitResult blockHit) {
-			grabBlock(player, world, blockHit.getBlockPos());
-		}
-	}
-
-	private static void grabBlock(ServerPlayerEntity player, ServerWorld world, BlockPos pos) {
-		BlockState blockState = world.getBlockState(pos);
-		if (blockState.isAir() || blockState.getHardness(world, pos) < 0 || blockState.isOf(Blocks.BEDROCK)) {
-			return;
-		}
-		HeadMastery.practice(player, HeadType.FROG);
-		BlockEntity blockEntity = world.getBlockEntity(pos);
-		if (blockEntity instanceof net.minecraft.inventory.Inventory inventory) {
-			HeadMastery.challenge(player, "frog_unpack");
-			for (int i = 0; i < inventory.size(); i++) {
-				giveOrDrop(player, inventory.removeStack(i));
-			}
-		}
-		List<ItemStack> drops = List.of();
-		if (!blockState.isToolRequired()) {
-			drops = Block.getDroppedStacks(blockState, world, pos, blockEntity, player, ItemStack.EMPTY);
-		}
-		world.breakBlock(pos, false, player);
-		for (ItemStack drop : drops) {
-			giveOrDrop(player, drop);
-		}
-	}
-
-	private static void pull(Entity entity, PlayerEntity player) {
-		Vec3d to = player.getPos().subtract(entity.getPos()).normalize().multiply(1.15).add(0, 0.25, 0);
-		entity.addVelocity(to.x, to.y, to.z);
-		entity.velocityModified = true;
-	}
-
-	private static void giveOrDrop(PlayerEntity player, ItemStack stack) {
-		if (stack.isEmpty()) {
-			return;
-		}
-		if (!player.getInventory().insertStack(stack)) {
-			player.dropItem(stack, false);
-		}
+		if (hit.getType() == HitResult.Type.MISS) return;
+		state.frogCooldown = FrogTongueEntity.DURATION
+			+ (HeadMastery.mastered(player, HeadType.FROG) ? 10 : HeadRules.FROG_COOLDOWN_TICKS);
+		player.getServerWorld().spawnEntity(new FrogTongueEntity(player, hit));
+		HeadSounds.play(player, SoundEvents.ENTITY_FROG_TONGUE, 1.6F, 1.1F);
+		HeadSounds.play(player, SoundEvents.ENTITY_SNOWBALL_THROW, 0.3F, 1.35F);
 	}
 
 	private static LivingEntity rayEntity(PlayerEntity player, double range) {
@@ -232,7 +158,7 @@ public final class SkillHandler {
 		EntityHitResult best = null;
 		double bestDist = Double.MAX_VALUE;
 		for (Entity entity : player.getWorld().getOtherEntities(player, box)) {
-			if (entity.isSpectator()) continue;
+			if (entity.isSpectator() || entity instanceof FrogTongueEntity) continue;
 			if (HeadLookups.worn(player) == HeadType.BEE && entity instanceof net.minecraft.entity.passive.BeeEntity
 				&& entity.getCommandTags().contains("mhf_owner:" + player.getUuid())) continue;
 			if (entity instanceof LivingEntity living && HeadlessAccess.isHeadless(living)) {

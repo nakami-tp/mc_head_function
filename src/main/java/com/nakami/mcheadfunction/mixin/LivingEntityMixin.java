@@ -26,7 +26,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LivingEntity.class)
-public abstract class LivingEntityMixin extends Entity implements HeadlessAccess, com.nakami.mcheadfunction.head.HeadStunAccess {
+public abstract class LivingEntityMixin extends Entity implements com.nakami.mcheadfunction.head.HeadCrushAccess, HeadlessAccess, com.nakami.mcheadfunction.head.HeadStunAccess {
 	@Unique
 	private static final TrackedData<Boolean> MHF_HEADLESS = DataTracker.registerData(LivingEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
 
@@ -34,6 +34,11 @@ public abstract class LivingEntityMixin extends Entity implements HeadlessAccess
 	private static final TrackedData<Boolean> MHF_STUNNED = DataTracker.registerData(LivingEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
 	@Override public boolean mhf$isStunned() { return dataTracker.get(MHF_STUNNED); }
 	@Override public void mhf$setStunned(boolean stunned) { dataTracker.set(MHF_STUNNED, stunned); }
+
+	@Unique
+	private static final TrackedData<Integer> MHF_CRUSH = DataTracker.registerData(LivingEntity.class, TrackedDataHandlerRegistry.INTEGER);
+	@Override public int mhf$crushTicks() { return dataTracker.get(MHF_CRUSH); }
+	@Override public void mhf$crush(int ticks) { dataTracker.set(MHF_CRUSH, Math.max(ticks, mhf$crushTicks())); }
 
 	@Unique
 	private float mhf$healthBeforeDamage;
@@ -45,6 +50,10 @@ public abstract class LivingEntityMixin extends Entity implements HeadlessAccess
 	@Inject(method = "tick", at = @At("HEAD"))
 	private void mhf$tickStun(CallbackInfo ci) {
 		com.nakami.mcheadfunction.wear.GoatCharge.tickTarget((LivingEntity) (Object) this);
+		if (!getWorld().isClient() && mhf$crushTicks() > 0) {
+			dataTracker.set(MHF_CRUSH, mhf$crushTicks() - 1);
+			setVelocity(getVelocity().multiply(0.15, 1, 0.15));
+		}
 	}
 
 	@Inject(method = "jump", at = @At("HEAD"), cancellable = true)
@@ -56,6 +65,7 @@ public abstract class LivingEntityMixin extends Entity implements HeadlessAccess
 	private void mhf$initHeadless(DataTracker.Builder builder, CallbackInfo ci) {
 		builder.add(MHF_HEADLESS, false);
 		builder.add(MHF_STUNNED, false);
+		builder.add(MHF_CRUSH, 0);
 	}
 
 	@Override

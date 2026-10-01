@@ -8,7 +8,10 @@
       "com.nakami.mcheadfunction.HeadGameplayTest",
       "com.nakami.mcheadfunction.HeadDepthTest",
       "com.nakami.mcheadfunction.CreeperGameplayTest",
-      "com.nakami.mcheadfunction.BlazeGameplayTest"
+      "com.nakami.mcheadfunction.BlazeGameplayTest",
+      "com.nakami.mcheadfunction.GolemGameplayTest",
+      "com.nakami.mcheadfunction.FrogGameplayTest",
+      "com.nakami.mcheadfunction.BeeGameplayTest"
     ]
   }
 }

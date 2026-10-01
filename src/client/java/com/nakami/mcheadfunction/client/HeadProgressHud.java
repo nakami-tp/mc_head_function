@@ -25,7 +25,9 @@ public final class HeadProgressHud {
 		draw.fill(x, y + 11, x + Math.min(100, xp / 10), y + 14, 0xFFE0B35C);
 		Text state = null;
 		if (HeadLookups.worn(client.player) == HeadType.RABBIT) state = Text.translatable("hud.mc_head_function.rabbit", progress.rabbitChain(), HeadDepthRules.rabbitHeight(Math.max(1, progress.rabbitChain())));
-		if (HeadLookups.worn(client.player) == HeadType.GOAT) state = Text.translatable(progress.goatTicks() > 0 ? "hud.mc_head_function.charging" : "hud.mc_head_function.goat_ready", Math.max(0, progress.goatCooldown() / 20));
+		if (HeadLookups.worn(client.player) == HeadType.GOAT) state = progress.goatTicks() > 0
+			? Text.translatable("hud.mc_head_function.charging", client.options.leftKey.getBoundKeyLocalizedText(), client.options.rightKey.getBoundKeyLocalizedText())
+			: Text.translatable("hud.mc_head_function.goat_ready", Math.max(0, progress.goatCooldown() / 20));
 		if (state != null) draw.drawTextWithShadow(client.textRenderer, state, x, y + 19, 0xFFFFFF);
 	}
 }

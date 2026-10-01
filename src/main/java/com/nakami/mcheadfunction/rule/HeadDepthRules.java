@@ -4,16 +4,18 @@ package com.nakami.mcheadfunction.rule;
 public final class HeadDepthRules {
 	public static final int MASTERY_MAX = 1000;
 	public static final int RABBIT_WINDOW = 4;
+	public static final int RABBIT_MAX_CHAIN = 16;
+	public static final int RABBIT_MAX_HEIGHT = 80;
 	public static final int GOAT_DURATION = 100;
 	public static final int GOAT_COOLDOWN = 160;
-	private static final double[] JUMP_HEIGHTS = {1.25, 2.5, 5, 10, 20, 40, 70, 100};
+	private static final double[] JUMP_HEIGHTS = {1.25, 1.75, 2.5, 3.5, 5, 7, 10, 14, 20, 28, 40, 50, 60, 68, 74, RABBIT_MAX_HEIGHT};
 	private HeadDepthRules() { }
 
 	public static double rabbitHeight(int chain) {
 		return JUMP_HEIGHTS[Math.clamp(chain - 1, 0, JUMP_HEIGHTS.length - 1)];
 	}
 	public static double rabbitSpeedMultiplier(int chain) {
-		return 1 + Math.clamp(chain - 1, 0, 7) * 0.15;
+		return chain <= 0 ? 1 : 1.15 + Math.clamp(chain - 1, 0, RABBIT_MAX_CHAIN - 1) * 0.12;
 	}
 	public static double rabbitJumpVelocity(int chain) {
 		double lo = 0, hi = 8, target = rabbitHeight(chain);

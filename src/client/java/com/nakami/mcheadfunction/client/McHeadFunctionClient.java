@@ -25,14 +25,35 @@ public class McHeadFunctionClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.GoatChargeS2CPayload.ID,
+			(payload, context) -> context.client().execute(() -> GoatChargeControl.receive(payload)));
+		ClientTickEvents.END_CLIENT_TICK.register(client -> GoatChargeControl.tick());
+		net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> GoatChargeControl.reset());
+		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.GolemQuakeS2CPayload.ID,
+			(payload, context) -> context.client().execute(() -> GolemQuake.start(payload.strength())));
+		ClientTickEvents.END_CLIENT_TICK.register(client -> GolemQuake.tick(client.world != null));
+		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.GoatImpactS2CPayload.ID,
+			(payload, context) -> context.client().execute(() -> GoatImpact.ticks = payload.duration()));
+		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			if (client.player == null) GoatImpact.ticks = 0;
+			else if (GoatImpact.ticks > 0) GoatImpact.ticks--;
+		});
 		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.RabbitLeapS2CPayload.ID,
 			(payload, context) -> context.client().execute(() -> {
 				var player = context.client().player;
 				if (player == null) return;
-				player.setVelocity(payload.x(), payload.y(), payload.z());
+				// Horizontal movement belongs to the local client; the server copy is stale.
+				player.setVelocity(player.getVelocity().x, payload.y(), player.getVelocity().z);
+				// RabbitJumpMixin cancels vanilla jump, including its sprint impulse.
+				if (player.isSprinting()) {
+					float yaw = player.getYaw() * net.minecraft.util.math.MathHelper.RADIANS_PER_DEGREE;
+					player.addVelocity(-net.minecraft.util.math.MathHelper.sin(yaw) * 0.2, 0,
+						net.minecraft.util.math.MathHelper.cos(yaw) * 0.2);
+				}
 				player.setOnGround(false);
 				player.fallDistance = 0;
 			}));
+		EntityRendererRegistry.register(ModEntities.FROG_TONGUE, FrogTongueRenderer::new);
 		EntityRendererRegistry.register(ModEntities.THROWN_HEAD, HeadProjectileRenderer::new);
 		net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register(HeadHud::render);
 		net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register(HeadProgressHud::render);

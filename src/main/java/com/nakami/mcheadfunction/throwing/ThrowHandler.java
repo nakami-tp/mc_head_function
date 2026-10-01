@@ -50,6 +50,14 @@ public final class ThrowHandler {
 			thrown.setVelocity(look.x, look.y, look.z, launch, 0.0F);
 			thrown.setNoGravity(style != HeadType.ThrowStyle.KNOCK_OFF && style != HeadType.ThrowStyle.ZOMBIE_HOP && style != HeadType.ThrowStyle.GOLEM_ROLL);
 		}
+		if (style == HeadType.ThrowStyle.GOLEM_ROLL) {
+			Vec3d forward = look.multiply(1, 0, 1);
+			if (forward.lengthSquared() < 0.001) forward = Vec3d.fromPolar(0, player.getYaw());
+			forward = forward.normalize();
+			// Beyond both the full rolling silhouette and the player's body, even on diagonals.
+			thrown.setPosition(player.getPos().add(forward.multiply(4.5)).add(0, 0.1, 0));
+			thrown.setVelocity(forward.multiply(ThrownHeadEntity.GOLEM_SPEED));
+		}
 		world.spawnEntity(thrown);
 		if (style == HeadType.ThrowStyle.BAT_SONAR && thrown.getWorld() instanceof net.minecraft.server.world.ServerWorld) {
 			thrown.releaseSonar();

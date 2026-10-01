@@ -26,13 +26,20 @@ public final class HeadProjectileRenderer extends EntityRenderer<ThrownHeadEntit
 		float time = entity.age + delta;
 		boolean active = entity.isActive();
 		HeadType type = entity.getHeadType();
-		matrices.translate(0, 0.36 + (active && type == HeadType.ENDERMAN ? Math.sin(time * 0.3) * 0.08 : 0), 0);
+		boolean giant = entity.isGiantRoller();
+		float roll = -entity.getRollDistance(delta) / (ThrownHeadEntity.GOLEM_SIZE / 2);
+		// Lowest rotated vertex of the head cuboid and its protruding nose.
+		double sin = Math.sin(roll), cos = Math.cos(roll);
+		double bodyBottom = -2.5 * Math.abs(cos) + Math.min(1.5 * sin, -2.5 * sin);
+		double noseBottom = Math.min(-2.5 * cos, -0.5 * cos) + Math.min(2.5 * sin, 1.5 * sin);
+		double support = -Math.min(bodyBottom, noseBottom);
+		matrices.translate(0, (giant ? support : 0.36) + (active && type == HeadType.ENDERMAN ? Math.sin(time * 0.3) * 0.08 : 0), 0);
 		var velocity = entity.getVelocity();
-		float facing = active && type == HeadType.ZOMBIE ? -entity.getYaw(delta)
+		float facing = active && (type == HeadType.ZOMBIE || giant) ? -entity.getYaw(delta)
 			: (float) Math.toDegrees(Math.atan2(velocity.x, velocity.z));
 		matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180 + facing));
 		float pitch = active ? switch (type) {
-			case IRON_GOLEM -> time * 24;
+			case IRON_GOLEM -> (float) Math.toDegrees(roll);
 			case ZOMBIE -> entity.getBiteTicks() > 0
 				? (float) Math.sin(Math.max(0, entity.getBiteTicks() - delta) / 6.0 * Math.PI) * 22
 				: (float) Math.max(-12, Math.min(12, -velocity.y * 45));
@@ -40,6 +47,7 @@ public final class HeadProjectileRenderer extends EntityRenderer<ThrownHeadEntit
 			default -> 0;
 		} : time * 16;
 		matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(pitch));
+		if (giant) matrices.scale(ThrownHeadEntity.GOLEM_SCALE, ThrownHeadEntity.GOLEM_SCALE, ThrownHeadEntity.GOLEM_SCALE);
 		items.renderItem(entity.getStack(), ModelTransformationMode.NONE, light, OverlayTexture.DEFAULT_UV,
 			matrices, vertices, entity.getWorld(), entity.getId());
 		matrices.pop();

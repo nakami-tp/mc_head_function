@@ -1,0 +1,4 @@
+// Keep diagnostics from replacing classes loaded by a running development client.
+allprojects {
+    layout.buildDirectory.set(file('build/goat-isolated'))
+}

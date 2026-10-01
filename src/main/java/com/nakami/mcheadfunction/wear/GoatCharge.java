@@ -35,7 +35,9 @@ public final class GoatCharge {
 		}
 	}
 	private GoatCharge() { }
-	public static void register() { }
+	public static void register() {
+		net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> PlayerHeadAccess.state(handler.player).goatMining.clear());
+	}
 	public static boolean isStunned(LivingEntity entity) { return entity.getWorld().isClient() ? ((HeadStunAccess) entity).mhf$isStunned() : entity.hasStatusEffect(STUN); }
 	public static void toggle(ServerPlayerEntity player) {
 		var state = PlayerHeadAccess.state(player);
@@ -43,31 +45,33 @@ public final class GoatCharge {
 		if (state.goatCooldown > 0 || player.hasVehicle() || player.isTouchingWater() || !player.isAlive()) return;
 		state.startGoatDash(player.getPos());
 		state.goatHeading = player.getYaw();
+		state.goatPitch = player.getPitch();
+		syncView(player, true);
 		state.goatCooldown = HeadDepthRules.GOAT_DURATION + HeadDepthRules.GOAT_COOLDOWN;
 		HeadSounds.play(player, SoundEvents.ENTITY_GOAT_PREPARE_RAM, 1F, 0.7F);
 	}
 	public static void stop(ServerPlayerEntity player) {
 		var state = PlayerHeadAccess.state(player);
 		state.clearGoatDash();
+		syncView(player, false);
 		state.goatCooldown = HeadDepthRules.GOAT_COOLDOWN;
-		player.setVelocity(player.getVelocity().multiply(0.2, 1, 0.2));
-		player.velocityModified = true;
+		setChargeVelocity(player, player.getVelocity().multiply(0.2, 1, 0.2));
 	}
 	public static void tick(ServerPlayerEntity player) {
 		var state = PlayerHeadAccess.state(player);
 		if (state.goatDashTicks <= 0) return;
-		if (HeadLookups.worn(player) != HeadType.GOAT || player.hasVehicle() || player.isTouchingWater() || isStunned(player)) { stop(player); return; }
-		if (player.horizontalCollision) {
-			player.getServerWorld().spawnParticles(ParticleTypes.POOF, player.getX(), player.getY() + 0.7, player.getZ(), 18, 0.4, 0.3, 0.4, 0.08);
-			HeadSounds.play(player, SoundEvents.ENTITY_GOAT_RAM_IMPACT, 1F, 0.65F);
-			stop(player); return;
-		}
-		state.goatHeading = HeadDepthRules.steer(state.goatHeading, player.getYaw(), HeadMastery.mastered(player, HeadType.GOAT) ? 3F : 1.8F);
+		if (HeadLookups.worn(player) != HeadType.GOAT || player.hasVehicle() || player.isTouchingWater() || isStunned(player) || !player.isAlive() || player.isSpectator()) { stop(player); return; }
+		if (player.getServerWorld().getTime() >= state.goatSteeringExpires) state.goatSteering = 0;
+		state.goatHeading += state.goatSteering * (HeadMastery.mastered(player, HeadType.GOAT) ? 3F : 1.8F);
+		player.setYaw(state.goatHeading);
+		player.setPitch(state.goatPitch);
+		player.setHeadYaw(state.goatHeading);
+		syncView(player, true);
 		state.goatSpeed = Math.min(1.05, state.goatSpeed + 0.025);
 		double angle = Math.toRadians(state.goatHeading);
 		Vec3d direction = new Vec3d(-Math.sin(angle), 0, Math.cos(angle));
-		player.setVelocity(direction.x * state.goatSpeed, player.getVelocity().y, direction.z * state.goatSpeed);
-		player.velocityModified = true;
+		if (state.goatMining.tick(player, direction)) return;
+		setChargeVelocity(player, new Vec3d(direction.x * state.goatSpeed, player.getVelocity().y, direction.z * state.goatSpeed));
 		var world = player.getServerWorld();
 		if (player.age % 2 == 0) {
 			world.spawnParticles(ParticleTypes.CLOUD, player.getX() - direction.x * 0.4, player.getY() + 0.1, player.getZ() - direction.z * 0.4, 5, 0.22, 0.08, 0.22, 0.02);
@@ -93,6 +97,24 @@ public final class GoatCharge {
 			HeadMastery.practice(player, HeadType.GOAT);
 			if (state.goatHit.size() >= 3) HeadMastery.challenge(player, "goat_stampede");
 		}
+	}
+	public static void steer(ServerPlayerEntity player, int direction) {
+		var state = PlayerHeadAccess.state(player);
+		if (state.goatDashTicks <= 0 || direction < -1 || direction > 1) return;
+		state.goatSteering = direction;
+		// Lost focus / input packets must not leave a permanent held turn.
+		state.goatSteeringExpires = player.getServerWorld().getTime() + 5;
+	}
+	private static void syncView(ServerPlayerEntity player, boolean active) {
+		var state = PlayerHeadAccess.state(player);
+		net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player,
+			new com.nakami.mcheadfunction.net.GoatChargeS2CPayload(active, state.goatHeading, state.goatPitch));
+	}
+	/** Send before the next entity tick can erase this impulse against the old collision surface. */
+	static void setChargeVelocity(ServerPlayerEntity player, Vec3d velocity) {
+		player.setVelocity(velocity);
+		player.velocityModified = true;
+		player.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.EntityVelocityUpdateS2CPacket(player));
 	}
 	/** Called for every living entity, including entities with disabled AI. */
 	public static void tickTarget(LivingEntity target) {

@@ -413,9 +413,17 @@ public class HeadGameplayTest implements FabricGameTest {
 		player.refreshPositionAndAngles(chestAbs.getX() + 0.5, chestAbs.getY(), chestAbs.getZ() - 1.4, 0, 35);
 		player.equipStack(EquipmentSlot.HEAD, new ItemStack(HeadItems.item(HeadType.FROG)));
 		SkillHandler.onSkill(player, true);
-		context.assertTrue(player.getInventory().count(Items.DIAMOND) >= 5, "Frog grab must put chest contents into the backpack");
-		context.expectBlock(Blocks.AIR, chestPos);
-		context.complete();
+		context.expectBlock(Blocks.CHEST, chestPos);
+		context.assertTrue(player.getInventory().count(Items.DIAMOND) == 0, "Loot must not arrive before tongue returns");
+		context.waitAndRun(4, () -> context.expectBlock(Blocks.CHEST, chestPos));
+		context.waitAndRun(7, () -> {
+			context.expectBlock(Blocks.AIR, chestPos);
+			context.assertTrue(player.getInventory().count(Items.DIAMOND) == 0, "Loot must travel with tongue");
+		});
+		context.waitAndRun(14, () -> {
+			context.assertTrue(player.getInventory().count(Items.DIAMOND) == 5, "Tongue must deliver exactly five diamonds");
+			context.complete();
+		});
 	}
 
 	@GameTest(templateName = EMPTY_STRUCTURE)
