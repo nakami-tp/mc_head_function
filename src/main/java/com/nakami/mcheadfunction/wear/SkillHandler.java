@@ -40,6 +40,7 @@ public final class SkillHandler {
 	public static void onSkill(ServerPlayerEntity player, boolean pressed) {
 		PlayerHeadState state = PlayerHeadAccess.state(player);
 		boolean wasHeld = state.skillHeld;
+		if (!pressed && wasHeld) com.nakami.mcheadfunction.blaze.BlazeFire.release(player);
 		state.skillHeld = pressed && !GoatCharge.isStunned(player) && player.isAlive() && !player.isSpectator();
 		if (!pressed || wasHeld || GoatCharge.isStunned(player) || !player.isAlive() || player.isSpectator()) {
 			return;

@@ -29,8 +29,8 @@
   "head.mc_head_function.charged_creeper_head.throw": "Attack to throw: Electric piercing blast",
   "head.mc_head_function.creeper_head.wear": "%s: Launch · Press again to detonate",
   "head.mc_head_function.creeper_head.throw": "Attack to throw: Fast impact explosion",
-  "head.mc_head_function.blaze_head.wear": "Hold %s to breathe fire · Fire immunity",
-  "head.mc_head_function.blaze_head.throw": "Attack to throw: Leave a trail of fire",
+  "head.mc_head_function.blaze_head.wear": "Hold %s to breathe fire and build heat · Release when hot for a fire wave · Overheating stops fire · Fire immunity",
+  "head.mc_head_function.blaze_head.throw": "Attack to throw: 6-second fire trail; your fire wave travels along it",
   "head.mc_head_function.iron_golem_head.wear": "More armor, damage and knockback",
   "head.mc_head_function.iron_golem_head.throw": "Attack to throw: Shockwave, then roll",
   "head.mc_head_function.goat_head.wear": "%s: charge / stop · launch targets, stun on landing",
@@ -141,5 +141,10 @@
   "advancement.mc_head_function.enderman_vein.title": "Whole Vein",
   "advancement.mc_head_function.enderman_vein.description": "Eat 16 connected blocks in one enderman throw",
   "advancement.mc_head_function.all_heads.title": "Master of Heads",
-  "advancement.mc_head_function.all_heads.description": "Master all 19 head types"
+  "advancement.mc_head_function.all_heads.description": "Master all 19 head types",
+  "hud.mc_head_function.blaze_heat": "Hold %s to build heat",
+  "hud.mc_head_function.blaze_release": "Release %s for fire wave",
+  "hud.mc_head_function.blaze_cooling": "Overheated · Cooling",
+  "death.attack.mc_head_function.blaze_fire": "%1$s was consumed by blaze fire",
+  "death.attack.mc_head_function.blaze_fire.player": "%1$s was consumed by %2$s's blaze fire"
 }

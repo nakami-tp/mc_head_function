@@ -35,6 +35,10 @@ public final class PlayerHeadState {
 	public int beeTargetTicks;
 	public final java.util.EnumMap<HeadType, Integer> mastery = new java.util.EnumMap<>(HeadType.class);
 	public final java.util.EnumMap<HeadType, Long> lastPractice = new java.util.EnumMap<>(HeadType.class);
+	public int blazeHeat;
+	public int blazeCooldown;
+	public boolean blazeSpraying;
+	public boolean blazeNeedsRelease;
 	public boolean skillHeld;
 	public UUID markedTarget;
 	public UUID lastAmmo;
@@ -89,6 +93,7 @@ public final class PlayerHeadState {
 		mastery.forEach((type, xp) -> progress.putInt(type.name(), xp));
 		tag.put("mastery", progress);
 		tag.putInt("goatCooldown", goatCooldown);
+		tag.putInt("blazeCooldown", blazeCooldown);
 		tag.putInt("creeperCharges", creeperCharges);
 		tag.putInt("creeperRecharge", creeperRecharge);
 		tag.putInt("lightningCharge", lightningCharge);
@@ -110,6 +115,7 @@ public final class PlayerHeadState {
 		mastery.clear();
 		for (HeadType type : HeadType.values()) mastery.put(type, Math.clamp(progress.getInt(type.name()), 0, com.nakami.mcheadfunction.rule.HeadDepthRules.MASTERY_MAX));
 		goatCooldown = tag.getInt("goatCooldown");
+		blazeCooldown = Math.clamp(tag.getInt("blazeCooldown"), 0, com.nakami.mcheadfunction.blaze.BlazeFire.COOLDOWN);
 		creeperCharges = tag.getInt("creeperCharges");
 		creeperRecharge = tag.getInt("creeperRecharge");
 		lightningCharge = tag.getInt("lightningCharge");

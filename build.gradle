@@ -162,3 +162,30 @@ tasks.named('runCreeperValidation').configure {
 		}
 	}
 }
+
+// Blaze heat, fire-ground and propagation validation in a disposable client world.
+sourceSets {
+	blazeValidation {
+		compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+		runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+	}
+}
+loom {
+	mods { blaze_client_validation { sourceSet sourceSets.blazeValidation } }
+	runs {
+		blazeValidation {
+			client()
+			source sourceSets.blazeValidation
+			runDir 'build/blaze-validation'
+		}
+	}
+}
+tasks.named('runBlazeValidation').configure {
+	doFirst { delete 'build/blaze-validation/result.txt', 'build/blaze-validation/screenshots' }
+	doLast {
+		def result = file('build/blaze-validation/result.txt')
+		if (!result.exists() || !result.text.startsWith('PASS ')) {
+			throw new GradleException('Blaze validation failed; see build/blaze-validation/result.txt and logs.')
+		}
+	}
+}
