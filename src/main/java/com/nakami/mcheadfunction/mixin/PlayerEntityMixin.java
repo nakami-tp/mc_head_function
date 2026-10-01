@@ -1,5 +1,7 @@
 package com.nakami.mcheadfunction.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.nakami.mcheadfunction.behead.BeheadingHandler;
 import com.nakami.mcheadfunction.head.HeadItems;
 import com.nakami.mcheadfunction.head.PlayerHeadAccess;
@@ -17,7 +19,6 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(PlayerEntity.class)
 public abstract class PlayerEntityMixin implements PlayerHeadAccess {
@@ -55,8 +56,15 @@ public abstract class PlayerEntityMixin implements PlayerHeadAccess {
 		}
 	}
 
-	@Inject(method = "eatFood", at = @At("RETURN"))
-	private void mhf$eat(World world, ItemStack stack, FoodComponent food, CallbackInfoReturnable<ItemStack> cir) {
-		WearHandler.onEat((PlayerEntity) (Object) this, stack, food);
+	@WrapMethod(method = "eatFood")
+	private ItemStack mhf$eat(World world, ItemStack stack, FoodComponent food, Operation<ItemStack> original) {
+		PlayerEntity self = (PlayerEntity) (Object) this;
+		// The final bite empties the original stack before the post-meal callback.
+		ItemStack eaten = stack.copy();
+		ItemStack result = original.call(world, stack, WearHandler.foodForEating(self, eaten, food));
+		if (!world.isClient()) {
+			WearHandler.onEat(self, eaten, food);
+		}
+		return result;
 	}
 }

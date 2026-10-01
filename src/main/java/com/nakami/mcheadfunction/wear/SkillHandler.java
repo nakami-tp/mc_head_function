@@ -92,10 +92,11 @@ public final class SkillHandler {
 			player.getBoundingBox().expand(64),
 			ammo -> player.getUuid().equals(ammo.ownerId())
 		);
-		if (state.creeperCharges <= 0 || live.size() >= HeadRules.CREEPER_MAX_CHARGES) {
+		if (!live.isEmpty()) {
 			live.forEach(HeadAmmoEntity::detonate);
 			return;
 		}
+		if (state.creeperCharges <= 0) return;
 		HeadAmmoEntity ammo = new HeadAmmoEntity(world, player);
 		Vec3d look = player.getRotationVec(1.0F);
 		ammo.setPosition(player.getX(), player.getEyeY() - 0.1, player.getZ());

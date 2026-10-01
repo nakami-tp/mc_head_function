@@ -82,6 +82,33 @@ publishing {
 	}
 }
 
+// Isolated, real-client regression scene; never included in the release JAR.
+sourceSets {
+	clientValidation {
+		compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+		runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+	}
+}
+loom {
+	mods { head_client_validation { sourceSet sourceSets.clientValidation } }
+	runs {
+		clientValidation {
+			client()
+			source sourceSets.clientValidation
+			runDir 'build/client-validation'
+		}
+	}
+}
+tasks.named('runClientValidation').configure {
+	doFirst { delete 'build/client-validation/result.txt', 'build/client-validation/screenshots' }
+	doLast {
+		def result = file('build/client-validation/result.txt')
+		if (!result.exists() || !result.text.startsWith('PASS ')) {
+			throw new GradleException('Client validation failed; see build/client-validation/result.txt and logs.')
+		}
+	}
+}
+
 // Head-depth scenarios have their own world and do not replace existing client regressions.
 sourceSets {
 	depthValidation {
@@ -105,6 +132,33 @@ tasks.named('runDepthValidation').configure {
 		def result = file('build/depth-validation/result.txt')
 		if (!result.exists() || !result.text.startsWith('PASS ')) {
 			throw new GradleException('Head depth client validation failed; see build/depth-validation/result.txt and logs.')
+		}
+	}
+}
+
+// Creeper attachment and remote detonation scenes, isolated from player saves.
+sourceSets {
+	creeperValidation {
+		compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+		runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+	}
+}
+loom {
+	mods { creeper_client_validation { sourceSet sourceSets.creeperValidation } }
+	runs {
+		creeperValidation {
+			client()
+			source sourceSets.creeperValidation
+			runDir 'build/creeper-validation'
+		}
+	}
+}
+tasks.named('runCreeperValidation').configure {
+	doFirst { delete 'build/creeper-validation/result.txt', 'build/creeper-validation/screenshots' }
+	doLast {
+		def result = file('build/creeper-validation/result.txt')
+		if (!result.exists() || !result.text.startsWith('PASS ')) {
+			throw new GradleException('Creeper validation failed; see build/creeper-validation/result.txt and logs.')
 		}
 	}
 }

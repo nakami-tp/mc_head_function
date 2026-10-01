@@ -27,7 +27,7 @@
   "head.mc_head_function.enderman_head.throw": "Attack to throw: Consume connected matching blocks",
   "head.mc_head_function.charged_creeper_head.wear": "%s: Call lightning on a creature",
   "head.mc_head_function.charged_creeper_head.throw": "Attack to throw: Electric piercing blast",
-  "head.mc_head_function.creeper_head.wear": "%s: Fire · Press after two shots to detonate",
+  "head.mc_head_function.creeper_head.wear": "%s: Launch · Press again to detonate",
   "head.mc_head_function.creeper_head.throw": "Attack to throw: Fast impact explosion",
   "head.mc_head_function.blaze_head.wear": "Hold %s to breathe fire · Fire immunity",
   "head.mc_head_function.blaze_head.throw": "Attack to throw: Leave a trail of fire",

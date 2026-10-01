@@ -26,13 +26,16 @@ public final class HeadProjectileRenderer extends EntityRenderer<ThrownHeadEntit
 		float time = entity.age + delta;
 		boolean active = entity.isActive();
 		HeadType type = entity.getHeadType();
-		matrices.translate(0, 0.25 + (active && type == HeadType.ENDERMAN ? Math.sin(time * 0.3) * 0.08 : 0), 0);
+		matrices.translate(0, 0.36 + (active && type == HeadType.ENDERMAN ? Math.sin(time * 0.3) * 0.08 : 0), 0);
 		var velocity = entity.getVelocity();
-		float facing = (float) Math.toDegrees(Math.atan2(velocity.x, velocity.z));
+		float facing = active && type == HeadType.ZOMBIE ? -entity.getYaw(delta)
+			: (float) Math.toDegrees(Math.atan2(velocity.x, velocity.z));
 		matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180 + facing));
 		float pitch = active ? switch (type) {
 			case IRON_GOLEM -> time * 24;
-			case ZOMBIE -> (float) Math.sin(time * 0.6) * 18;
+			case ZOMBIE -> entity.getBiteTicks() > 0
+				? (float) Math.sin(Math.max(0, entity.getBiteTicks() - delta) / 6.0 * Math.PI) * 22
+				: (float) Math.max(-12, Math.min(12, -velocity.y * 45));
 			case ENDERMAN -> (float) Math.sin(time * 0.5) * 10;
 			default -> 0;
 		} : time * 16;
