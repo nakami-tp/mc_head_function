@@ -29,8 +29,8 @@
   "head.mc_head_function.charged_creeper_head.throw": "左键投掷：电流穿透后爆炸",
   "head.mc_head_function.creeper_head.wear": "%s：投放 · 再按引爆",
   "head.mc_head_function.creeper_head.throw": "左键投掷：高速命中爆炸",
-  "head.mc_head_function.blaze_head.wear": "按住 %s 喷火 · 火焰免疫",
-  "head.mc_head_function.blaze_head.throw": "左键投掷：沿飞行路径点火",
+  "head.mc_head_function.blaze_head.wear": "按住 %s 喷火蓄热 · 高热松手放火浪 · 过热停火 · 火焰免疫",
+  "head.mc_head_function.blaze_head.throw": "左键投掷：铺设 6 秒火径；火浪可沿自己的火径传播",
   "head.mc_head_function.iron_golem_head.wear": "增强护甲、伤害与击退",
   "head.mc_head_function.iron_golem_head.throw": "左键投掷：落地冲击波与滚动",
   "head.mc_head_function.goat_head.wear": "%s：惯性冲锋 / 停止 · 命中击飞，落地眩晕",
@@ -141,5 +141,10 @@
   "advancement.mc_head_function.enderman_vein.title": "一口整矿",
   "advancement.mc_head_function.enderman_vein.description": "一次末影人投掷连吃 16 块同种方块",
   "advancement.mc_head_function.all_heads.title": "百艺精通",
-  "advancement.mc_head_function.all_heads.description": "精通全部 19 种头"
+  "advancement.mc_head_function.all_heads.description": "精通全部 19 种头",
+  "hud.mc_head_function.blaze_heat": "按住 %s 蓄热",
+  "hud.mc_head_function.blaze_release": "松开 %s 释放火浪",
+  "hud.mc_head_function.blaze_cooling": "过热 · 冷却中",
+  "death.attack.mc_head_function.blaze_fire": "%1$s 被烈焰吞没",
+  "death.attack.mc_head_function.blaze_fire.player": "%1$s 被 %2$s 的烈焰吞没"
 }

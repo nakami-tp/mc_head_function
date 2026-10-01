@@ -72,13 +72,13 @@ public final class WearHandler {
 			GoatCharge.tick(player);
 			RabbitMovement.tick(player);
 			CreeperLaunch.tick(player);
-			tickBlazeSpray(player, worn, state);
+			com.nakami.mcheadfunction.blaze.BlazeFire.tickPlayer(player);
 			tickWolfThreat(world, player, worn);
 			BeeCommand.tick(player, worn);
 			if (worn != null && player.age % 2 == 0) {
 				ServerPlayNetworking.send(player, new HeadStatusS2CPayload(state.creeperCharges, state.creeperRecharge,
 					state.lightningCharge, state.frogCooldown, state.llamaCooldown, state.endermanDodgeCooldown,
-					(worn == HeadType.BLAZE && state.skillHeld) || state.goatDashTicks > 0));
+					(worn == HeadType.BLAZE && state.blazeSpraying) || state.goatDashTicks > 0, state.blazeHeat, state.blazeCooldown));
 			}
 			if (worn == HeadType.ARMADILLO && player.isSneaking() && player.age % 12 == 0) {
 				HeadEffects.ring(world, player.getPos(), 0.55);
@@ -147,32 +147,6 @@ public final class WearHandler {
 		}
 	}
 
-
-	private static void tickBlazeSpray(ServerPlayerEntity player, HeadType worn, PlayerHeadState state) {
-		if (!state.skillHeld || worn != HeadType.BLAZE || GoatCharge.isStunned(player)) {
-			return;
-		}
-		Vec3d start = player.getEyePos();
-		double range = HeadMastery.mastered(player, HeadType.BLAZE) ? 8 : 6;
-		Vec3d end = start.add(player.getRotationVec(1.0F).multiply(range));
-		for (LivingEntity living : player.getWorld().getEntitiesByClass(LivingEntity.class, player.getBoundingBox().expand(range), e -> e != player)) {
-			if (living.getBoundingBox().raycast(start, end).isPresent()) {
-				living.setOnFireFor(4);
-				HeadMastery.practice(player, HeadType.BLAZE);
-			}
-		}
-		var hit = player.getWorld().raycast(new net.minecraft.world.RaycastContext(start, end, net.minecraft.world.RaycastContext.ShapeType.COLLIDER, net.minecraft.world.RaycastContext.FluidHandling.NONE, player));
-		if (player.age % 2 == 0) {
-			HeadEffects.line(player.getServerWorld(), start.add(player.getRotationVec(1).multiply(0.6)), hit.getPos(), ParticleTypes.FLAME);
-		}
-		if (player.age % 30 == 0) HeadSounds.play(player, net.minecraft.sound.SoundEvents.BLOCK_FIRE_AMBIENT, 0.18F, 1.1F);
-		if (hit.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK) {
-			var pos = hit.getBlockPos().offset(hit.getSide());
-			if (player.getWorld().getBlockState(pos).isAir()) {
-				player.getWorld().setBlockState(pos, net.minecraft.block.Blocks.FIRE.getDefaultState());
-			}
-		}
-	}
 
 	private static void tickWolfThreat(ServerWorld world, ServerPlayerEntity player, HeadType worn) {
 		PlayerHeadState state = PlayerHeadAccess.state(player);

@@ -78,6 +78,7 @@ public class McHeadFunctionClient implements ClientModInitializer {
 		});
 		ClientTickEvents.END_CLIENT_TICK.register(new SkillKeyTracker());
 		WorldRenderEvents.AFTER_ENTITIES.register(SonarWorldRender::afterEntities);
+		WorldRenderEvents.AFTER_ENTITIES.register(BlazeHeatRender::render);
 	}
 
 	private static final class SkillKeyTracker implements ClientTickEvents.EndTick {

@@ -220,19 +220,19 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 	private void blazeTrailTick() {
 		ServerWorld world = (ServerWorld) getWorld();
 		Vec3d start = getPos();
-		Vec3d vel = getVelocity();
-		double stepLen = vel.length();
-		traveled += stepLen;
-		int steps = Math.max(1, (int) Math.ceil(stepLen / HeadRules.PIERCE_STEP));
-		for (int i = 0; i <= steps; i++) {
-			Vec3d point = start.add(vel.multiply((double) i / steps));
-			BlockPos pos = BlockPos.ofFloored(point);
-			if (world.getBlockState(pos).isAir() && world.getBlockState(pos.down()).isSolid()) {
-				world.setBlockState(pos, Blocks.FIRE.getDefaultState());
-			}
+		Vec3d delta = getVelocity();
+		double length = Math.min(delta.length(), Math.max(0, 16 - traveled));
+		Vec3d end = start.add(delta.normalize().multiply(length));
+		var hit = world.raycast(new net.minecraft.world.RaycastContext(start, end,
+			net.minecraft.world.RaycastContext.ShapeType.COLLIDER,
+			net.minecraft.world.RaycastContext.FluidHandling.ANY, this));
+		end = hit.getPos();
+		if (getOwner() instanceof ServerPlayerEntity owner) {
+			com.nakami.mcheadfunction.blaze.BlazeFire.trail(world, owner, start, end);
 		}
-		hurtNearby(0, true);
-		if (traveled >= 16) {
+		traveled += start.distanceTo(end);
+		if (hit.getType() != HitResult.Type.MISS || traveled >= 15.999) {
+			setPosition(end);
 			recycle();
 		}
 	}
