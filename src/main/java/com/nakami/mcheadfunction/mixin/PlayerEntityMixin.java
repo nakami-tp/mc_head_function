@@ -42,6 +42,7 @@ public abstract class PlayerEntityMixin implements PlayerHeadAccess {
 	@Inject(method = "attack", at = @At("HEAD"), cancellable = true)
 	private void mhf$attack(Entity target, CallbackInfo ci) {
 		PlayerEntity self = (PlayerEntity) (Object) this;
+		if (com.nakami.mcheadfunction.wear.GoatCharge.isStunned(self)) { ci.cancel(); return; }
 		if (self.getWorld().isClient()) {
 			return;
 		}

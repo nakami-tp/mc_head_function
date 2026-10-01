@@ -15,6 +15,7 @@ public final class ThrowHandler {
 	}
 
 	public static void throwHeldHead(ServerPlayerEntity player) {
+		if (com.nakami.mcheadfunction.wear.GoatCharge.isStunned(player) || !player.isAlive() || player.isSpectator()) return;
 		ItemStack stack = player.getMainHandStack();
 		HeadType type = HeadItems.ofStack(stack);
 		if (type == null) {

@@ -20,6 +20,19 @@ public final class PlayerHeadState {
 	public Vec3d goatDashOrigin;
 	public final Set<UUID> goatHit = new HashSet<>();
 	public final Map<UUID, Integer> wolfFleeRemaining = new HashMap<>();
+	public float goatHeading;
+	public double goatSpeed;
+	public int goatCooldown;
+	public int rabbitChain;
+	public int rabbitJumpRequestTicks;
+	public long rabbitLandedAt = -100;
+	public boolean rabbitAirborne;
+	public double rabbitLaunchY;
+	public boolean rabbitFallProtected;
+	public UUID beeTarget;
+	public int beeTargetTicks;
+	public final java.util.EnumMap<HeadType, Integer> mastery = new java.util.EnumMap<>(HeadType.class);
+	public final java.util.EnumMap<HeadType, Long> lastPractice = new java.util.EnumMap<>(HeadType.class);
 	public boolean skillHeld;
 	public UUID markedTarget;
 	public UUID lastAmmo;
@@ -36,6 +49,8 @@ public final class PlayerHeadState {
 		if (lightningCharge < needed) {
 			lightningCharge++;
 		}
+		if (goatCooldown > 0) goatCooldown--;
+		if (beeTargetTicks > 0) beeTargetTicks--;
 		if (frogCooldown > 0) {
 			frogCooldown--;
 		}
@@ -54,7 +69,8 @@ public final class PlayerHeadState {
 	}
 
 	public void startGoatDash(Vec3d origin) {
-		goatDashTicks = 40;
+		goatDashTicks = com.nakami.mcheadfunction.rule.HeadDepthRules.GOAT_DURATION;
+		goatSpeed = 0.35;
 		goatDashOrigin = origin;
 		goatHit.clear();
 	}
@@ -67,6 +83,10 @@ public final class PlayerHeadState {
 
 	public void write(NbtCompound nbt) {
 		NbtCompound tag = new NbtCompound();
+		NbtCompound progress = new NbtCompound();
+		mastery.forEach((type, xp) -> progress.putInt(type.name(), xp));
+		tag.put("mastery", progress);
+		tag.putInt("goatCooldown", goatCooldown);
 		tag.putInt("creeperCharges", creeperCharges);
 		tag.putInt("creeperRecharge", creeperRecharge);
 		tag.putInt("lightningCharge", lightningCharge);
@@ -84,6 +104,10 @@ public final class PlayerHeadState {
 			return;
 		}
 		NbtCompound tag = nbt.getCompound("mhf");
+		NbtCompound progress = tag.getCompound("mastery");
+		mastery.clear();
+		for (HeadType type : HeadType.values()) mastery.put(type, Math.clamp(progress.getInt(type.name()), 0, com.nakami.mcheadfunction.rule.HeadDepthRules.MASTERY_MAX));
+		goatCooldown = tag.getInt("goatCooldown");
 		creeperCharges = tag.getInt("creeperCharges");
 		creeperRecharge = tag.getInt("creeperRecharge");
 		lightningCharge = tag.getInt("lightningCharge");

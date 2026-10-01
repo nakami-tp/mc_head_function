@@ -4,6 +4,9 @@
   "version": "1.0.0",
   "name": "Head gameplay regression tests",
   "entrypoints": {
-    "fabric-gametest": ["com.nakami.mcheadfunction.HeadGameplayTest"]
+    "fabric-gametest": [
+      "com.nakami.mcheadfunction.HeadGameplayTest",
+      "com.nakami.mcheadfunction.HeadDepthTest"
+    ]
   }
 }
