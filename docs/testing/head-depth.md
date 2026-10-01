@@ -2,6 +2,8 @@
 
 规格：[玩法深化](../../.scratch/head-depth/spec.md)。能力与强化清单：[heads.md](../heads.md)。
 
+手动逐项验收请使用 [成就与熟练度测试清单](./achievements-and-mastery-checklist.md)。
+
 ## 自动回归
 
 - `./gradlew build`：成功。26 个 GameTest、13 个 JUnit 测试全部通过。
