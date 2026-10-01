@@ -12,6 +12,8 @@ import net.minecraft.util.math.Vec3d;
 public final class PlayerHeadState {
 	public int creeperCharges = HeadRules.CREEPER_MAX_CHARGES;
 	public int creeperRecharge;
+	public boolean creeperFallProtected;
+	public long creeperLaunchedAt;
 	public int lightningCharge;
 	public int frogCooldown;
 	public int llamaCooldown;

@@ -4,7 +4,7 @@
 
 这是 Cursor / Claude / Codex 会自动加载的项目技能目录。来源是 [Matt Pocock skills](https://github.com/mattpocock/skills) 已发布的全套（engineering / productivity / misc）。`grill-with-docs` 必须同时加载 `grilling` 和 `domain-modeling`。
 
-词表在根目录 [`CONTEXT.md`](./CONTEXT.md)。规格在 [`.scratch/head-function/spec.md`](./.scratch/head-function/spec.md)。实现备注见 [`HANDOFF.md`](./HANDOFF.md)。
+词表在根目录 [`CONTEXT.md`](./CONTEXT.md)。规格在 [`.scratch/head-function/spec.md`](./.scratch/head-function/spec.md)。表内头效果清单见 [`docs/heads.md`](./docs/heads.md)。实现备注见 [`HANDOFF.md`](./HANDOFF.md)。
 
 ## Agent skills
 

@@ -31,6 +31,6 @@ public class HeadItem extends Item implements Equipment {
 
 	@Override
 	public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
-		return this.equipAndSwap(this, world, user, hand);
+		return HeadEquipment.equip(world, user, hand);
 	}
 }

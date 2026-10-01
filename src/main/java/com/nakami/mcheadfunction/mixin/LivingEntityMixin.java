@@ -78,10 +78,24 @@ public abstract class LivingEntityMixin extends Entity implements HeadlessAccess
 		mhf$setHeadless(nbt.getBoolean("mhf_headless"));
 	}
 
+	@Inject(method = "handleFallDamage", at = @At("HEAD"), cancellable = true)
+	private void mhf$creeperLanding(float distance, float multiplier, DamageSource source, CallbackInfoReturnable<Boolean> cir) {
+		if ((Object) this instanceof ServerPlayerEntity player && PlayerHeadAccess.state(player).creeperFallProtected) {
+			PlayerHeadAccess.state(player).creeperFallProtected = false;
+			player.fallDistance = 0;
+			cir.setReturnValue(false);
+		}
+	}
+
 	@Inject(method = "damage", at = @At("HEAD"), cancellable = true)
 	private void mhf$beforeDamage(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
 		LivingEntity self = (LivingEntity) (Object) this;
 		if (self instanceof ServerPlayerEntity player) {
+			if (source.isIn(DamageTypeTags.IS_FALL) && PlayerHeadAccess.state(player).creeperFallProtected) {
+				PlayerHeadAccess.state(player).creeperFallProtected = false;
+				cir.setReturnValue(false);
+				return;
+			}
 			if (WearHandler.tryEndermanDodge(player)) {
 				cir.setReturnValue(false);
 				return;

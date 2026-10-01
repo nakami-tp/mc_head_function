@@ -22,11 +22,20 @@ public final class HeadAmmoRenderer extends EntityRenderer<HeadAmmoEntity> {
 	@Override public void render(HeadAmmoEntity entity, float yaw, float delta, MatrixStack matrices, VertexConsumerProvider vertices, int light) {
 		float time = entity.age + delta;
 		matrices.push();
-		matrices.translate(0, 0.2, 0);
-		float pulse = 0.7F + 0.055F * (float) Math.sin(time * 0.7);
-		matrices.scale(pulse, pulse, pulse);
-		matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(time * 5));
-		if (!entity.hasNoGravity()) matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(time * 18));
+		matrices.translate(0, entity.getHeight() / 2, 0);
+		if (entity.isPlanted()) {
+			// Local +Y points away from the contacted surface; keep the base fixed.
+			matrices.multiply(entity.attachedFace().getRotationQuaternion());
+			matrices.translate(0, -0.10, 0);
+			matrices.scale(0.8F, 0.4F, 0.8F);
+			matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-90));
+			// Vanilla skull item is centered at y=-0.25; center it before turning its face outward.
+			matrices.translate(0, 0.25, 0);
+		} else {
+			matrices.scale(0.7F, 0.7F, 0.7F);
+			matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(time * 5));
+			matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(time * 18));
+		}
 		items.renderItem(entity.getStack(), ModelTransformationMode.NONE, light, OverlayTexture.DEFAULT_UV,
 			matrices, vertices, entity.getWorld(), entity.getId());
 		matrices.pop();

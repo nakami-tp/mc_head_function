@@ -19,6 +19,7 @@ import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.MovementType;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
@@ -48,6 +49,8 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 	private static final TrackedData<String> HEAD_TYPE = DataTracker.registerData(ThrownHeadEntity.class, TrackedDataHandlerRegistry.STRING);
 	private static final TrackedData<Boolean> ACTIVE = DataTracker.registerData(ThrownHeadEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
 
+	private static final TrackedData<Integer> BITE_TICKS = DataTracker.registerData(ThrownHeadEntity.class, TrackedDataHandlerRegistry.INTEGER);
+
 	private HeadType.ThrowStyle style = HeadType.ThrowStyle.DEFAULT;
 	private int activeTicks;
 	private double traveled;
@@ -75,6 +78,7 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 		super.initDataTracker(builder);
 		builder.add(HEAD_TYPE, HeadType.PIG.name());
 		builder.add(ACTIVE, false);
+		builder.add(BITE_TICKS, 0);
 	}
 
 	public void setHeadType(HeadType type) {
@@ -88,6 +92,8 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 			return HeadType.PIG;
 		}
 	}
+
+	public int getBiteTicks() { return dataTracker.get(BITE_TICKS); }
 
 	public boolean isActive() {
 		return this.dataTracker.get(ACTIVE);
@@ -120,6 +126,25 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 		if (getWorld().isClient() && age % 2 == 0) {
 			getWorld().addParticle(HeadEffects.particle(getHeadType()), getX(), getY() + 0.2, getZ(), 0, 0.015, 0);
 		}
+		if (isActive()) {
+			// ThrownEntity.tick uses setPosition, which bypasses solid-block collision.
+			baseTick();
+			if (!getWorld().isClient()) {
+				if (isInLava() || getY() < getWorld().getBottomY() - 16) {
+					discard();
+					return;
+				}
+				tickActive();
+			}
+			if (isRemoved()) return;
+			if (getHeadType() != HeadType.ENDERMAN) {
+				applyGravity();
+				move(MovementType.SELF, getVelocity());
+				double drag = getHeadType() == HeadType.ZOMBIE && isOnGround() ? 0.6 : 0.99;
+				setVelocity(getVelocity().multiply(drag, 0.98, drag));
+			}
+			return;
+		}
 		if (!getWorld().isClient()) {
 			if (isInLava() || getY() < getWorld().getBottomY() - 16) {
 				discard();
@@ -129,14 +154,7 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 				releaseSonar();
 				return;
 			}
-			if (isActive()) {
-				tickActive();
-				if (recycled) {
-					return;
-				}
-				super.tick();
-				return;
-			}
+
 			if (style == HeadType.ThrowStyle.KNOCK_OFF) {
 				traveled += getVelocity().length();
 				if (traveled >= HeadRules.KNOCK_OFF_DISTANCE) {
@@ -221,7 +239,13 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 
 	@Override
 	protected void onCollision(HitResult hitResult) {
-		if (getWorld().isClient() || recycled || isActive()) {
+		if (recycled || isActive()) return;
+		if (getWorld().isClient()) {
+			// Stop client prediction at the surface while awaiting the server's impact state.
+			if (hitResult instanceof BlockHitResult blockHit && getHeadType() != HeadType.CHARGED_CREEPER) {
+				placeAtImpact(blockHit);
+				setVelocity(Vec3d.ZERO);
+			}
 			return;
 		}
 		if (style == HeadType.ThrowStyle.CHARGED_PIERCE) {
@@ -235,12 +259,23 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 			recycle();
 			return;
 		}
+		placeAtImpact(hitResult);
 		HeadSounds.impact(this, getHeadType());
 		if (hitResult.getType() == HitResult.Type.ENTITY) {
 			onEntityHit((EntityHitResult) hitResult);
 		} else if (hitResult.getType() == HitResult.Type.BLOCK) {
 			onBlockHit((BlockHitResult) hitResult);
 		}
+	}
+
+	private void placeAtImpact(HitResult hit) {
+		Vec3d contact = hit.getPos();
+		if (hit instanceof BlockHitResult blockHit) {
+			Direction side = blockHit.getSide();
+			double offset = side == Direction.UP ? 0.001 : side == Direction.DOWN ? getHeight() + 0.001 : getWidth() / 2 + 0.001;
+			contact = contact.add(Vec3d.of(side.getVector()).multiply(offset));
+		}
+		setPosition(contact);
 	}
 
 	@Override
@@ -293,7 +328,7 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 	private void enterActive() {
 		setActive(true);
 		setVelocity(Vec3d.ZERO);
-		setNoGravity(style == HeadType.ThrowStyle.ZOMBIE_HOP);
+		setNoGravity(false);
 		activeTicks = 0;
 		if (style == HeadType.ThrowStyle.GOLEM_ROLL) {
 			golemShockwave();
@@ -311,6 +346,7 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 
 	private void tickActive() {
 		activeTicks++;
+		if (getBiteTicks() > 0) dataTracker.set(BITE_TICKS, getBiteTicks() - 1);
 		if (activeTicks >= HeadRules.ACTIVE_MAX_TICKS) {
 			recycle();
 			return;
@@ -337,17 +373,26 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 			return;
 		}
 		Vec3d to = target.getPos().subtract(getPos());
-		if (activeTicks % 10 == 0) {
-			setVelocity(to.normalize().multiply(0.35).add(0, 0.35, 0));
+		Vec3d horizontal = to.multiply(1, 0, 1);
+		if (horizontal.lengthSquared() > 0.01) {
+			setYaw((float) Math.toDegrees(Math.atan2(-horizontal.x, horizontal.z)));
+		}
+		if (isOnGround() && activeTicks % 4 == 0) {
+			double speed = Math.min(0.24, horizontal.length() / 10);
+			setVelocity(horizontal.normalize().multiply(speed).add(0, 0.24, 0));
+			velocityDirty = true;
 			HeadSounds.play(this, SoundEvents.BLOCK_WOOL_FALL, 0.18F, 0.7F);
 		}
 		if (biteCooldown > 0) {
 			biteCooldown--;
 		}
-		if (squaredDistanceTo(target) < 1.6 && biteCooldown <= 0) {
-			target.damage(world.getDamageSources().mobProjectile(this, ownerAsLiving()), HeadRules.ZOMBIE_BITE_DAMAGE);
+		if (getBoundingBox().expand(0.35).intersects(target.getBoundingBox()) && biteCooldown <= 0
+			&& world.raycast(new net.minecraft.world.RaycastContext(getPos().add(0, 0.25, 0), target.getPos().add(0, 0.25, 0),
+				net.minecraft.world.RaycastContext.ShapeType.COLLIDER, net.minecraft.world.RaycastContext.FluidHandling.NONE, this)).getType() == HitResult.Type.MISS
+			&& target.damage(world.getDamageSources().mobProjectile(this, ownerAsLiving()), HeadRules.ZOMBIE_BITE_DAMAGE)) {
 			HeadEffects.burst(world, target.getPos().add(0, 0.5, 0), HeadType.ZOMBIE);
-			HeadSounds.play(this, SoundEvents.ENTITY_GENERIC_EAT, 0.45F, 0.75F);
+			HeadSounds.play(this, SoundEvents.ENTITY_GENERIC_EAT, 0.9F, 0.7F);
+			dataTracker.set(BITE_TICKS, 6);
 			biteCooldown = 15;
 		}
 	}
@@ -398,11 +443,12 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 			if (eatBlock == null || !state.isOf(eatBlock) || !canEat(world, pos, state)) {
 				continue;
 			}
-			world.breakBlock(pos, true, this);
-			HeadSounds.play(this, SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME, 0.16F, 0.8F + eatCount * 0.025F);
+			if (!world.breakBlock(pos, true, this)) continue;
+			setPosition(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+			HeadSounds.play(this, SoundEvents.ENTITY_ENDERMAN_TELEPORT, 0.65F, 1.15F);
+			HeadSounds.play(this, SoundEvents.ENTITY_GENERIC_EAT, 0.65F, 0.85F);
 			world.spawnParticles(ParticleTypes.PORTAL, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, 8, 0.2, 0.2, 0.2, 0.05);
 			eatCount++;
-			setPosition(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
 			if (eatCount >= HeadRules.ENDERMAN_EAT_MAX) {
 				if (getOwner() instanceof ServerPlayerEntity player) HeadMastery.challenge(player, "enderman_vein");
 				recycle();
@@ -474,7 +520,7 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 			getZ(),
 			radius,
 			false,
-			World.ExplosionSourceType.NONE
+			getHeadType() == HeadType.CREEPER ? World.ExplosionSourceType.TNT : World.ExplosionSourceType.NONE
 		);
 	}
 

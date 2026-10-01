@@ -27,7 +27,7 @@
   "head.mc_head_function.enderman_head.throw": "左键投掷：连锁吞噬同种方块",
   "head.mc_head_function.charged_creeper_head.wear": "%s：瞄准生物召雷",
   "head.mc_head_function.charged_creeper_head.throw": "左键投掷：电流穿透后爆炸",
-  "head.mc_head_function.creeper_head.wear": "%s：发射 · 两发后再按引爆",
+  "head.mc_head_function.creeper_head.wear": "%s：投放 · 再按引爆",
   "head.mc_head_function.creeper_head.throw": "左键投掷：高速命中爆炸",
   "head.mc_head_function.blaze_head.wear": "按住 %s 喷火 · 火焰免疫",
   "head.mc_head_function.blaze_head.throw": "左键投掷：沿飞行路径点火",

@@ -71,6 +71,7 @@ public final class WearHandler {
 			applyPassives(player, worn);
 			GoatCharge.tick(player);
 			RabbitMovement.tick(player);
+			CreeperLaunch.tick(player);
 			tickBlazeSpray(player, worn, state);
 			tickWolfThreat(world, player, worn);
 			BeeCommand.tick(player, worn);
@@ -197,6 +198,17 @@ public final class WearHandler {
 		state.wolfFleeRemaining.keySet().removeIf(id -> !seen.contains(id));
 	}
 
+
+	public static FoodComponent foodForEating(PlayerEntity player, ItemStack stack, FoodComponent food) {
+		if (HeadLookups.worn(player) != HeadType.ZOMBIE || !stack.isOf(Items.ROTTEN_FLESH)) {
+			return food;
+		}
+		// Filter this meal only; preserve hunger from other sources and the item's components.
+		var effects = food.effects().stream()
+			.filter(entry -> !entry.effect().getEffectType().equals(StatusEffects.HUNGER)).toList();
+		return new FoodComponent(food.nutrition(), food.saturation(), food.canAlwaysEat(),
+			food.eatSeconds(), food.usingConvertsTo(), effects);
+	}
 
 	public static void onEat(PlayerEntity player, ItemStack stack, FoodComponent food) {
 		HeadType worn = HeadLookups.worn(player);
