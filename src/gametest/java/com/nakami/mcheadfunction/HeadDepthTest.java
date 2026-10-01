@@ -12,6 +12,36 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.block.Blocks;
 
 public class HeadDepthTest implements FabricGameTest {
+    @GameTest(templateName = EMPTY_STRUCTURE)
+    public void goatMiningUsesHardnessAndResetsOnStop(TestContext context) {
+        var player = context.createMockCreativeServerPlayerInWorld();
+        player.equipStack(EquipmentSlot.HEAD, new ItemStack(HeadItems.item(HeadType.GOAT)));
+        var wall = context.getAbsolutePos(new BlockPos(2, 2, 3));
+        player.refreshPositionAndAngles(wall.getX() + 0.5, wall.getY(), wall.getZ() - 0.31, 0, 0);
+        var world = context.getWorld();
+        var state = PlayerHeadAccess.state(player);
+        world.setBlockState(wall, Blocks.DIRT.getDefaultState());
+        GoatCharge.toggle(player);
+        for (int i = 0; i < 4; i++) GoatCharge.tick(player);
+        context.assertTrue(world.getBlockState(wall).isOf(Blocks.DIRT), "Dirt should show progress before breaking");
+        GoatCharge.tick(player);
+        context.assertTrue(world.getBlockState(wall).isAir(), "Dirt should break after five contact ticks");
+        world.setBlockState(wall, Blocks.STONE.getDefaultState());
+        for (int i = 0; i < 5; i++) GoatCharge.tick(player);
+        context.assertTrue(world.getBlockState(wall).isOf(Blocks.STONE), "Stone must take longer than dirt");
+        GoatCharge.stop(player);
+        state.goatCooldown = 0;
+        GoatCharge.toggle(player);
+        for (int i = 0; i < 10; i++) GoatCharge.tick(player);
+        context.assertTrue(world.getBlockState(wall).isOf(Blocks.STONE), "Stopping must discard old progress");
+        for (int i = 0; i < 5; i++) GoatCharge.tick(player);
+        context.assertTrue(world.getBlockState(wall).isAir(), "Stone should break after fifteen uninterrupted ticks");
+        world.setBlockState(wall, Blocks.BEDROCK.getDefaultState());
+        GoatCharge.tick(player);
+        context.assertTrue(world.getBlockState(wall).isOf(Blocks.BEDROCK) && state.goatDashTicks == 0, "Bedrock must stop charge without breaking");
+        context.complete();
+    }
+
 	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 30)
 	public void stunBlocksRabbitJumpAndHeldFlame(TestContext context) {
 		var player = context.createMockCreativeServerPlayerInWorld();
@@ -39,15 +69,57 @@ public class HeadDepthTest implements FabricGameTest {
 		player.equipStack(EquipmentSlot.HEAD, new ItemStack(HeadItems.item(HeadType.GOAT)));
 		player.setYaw(0);
 		SkillHandler.onSkill(player, true);
-		player.setYaw(90);
+		player.setYaw(180);
 		GoatCharge.tick(player);
 		context.assertTrue(Math.abs(player.getVelocity().x) < 0.03 && player.getVelocity().z > 0.3, "Looking right must not instantly turn the charge");
+		var state = PlayerHeadAccess.state(player);
+		context.assertTrue(state.goatHeading == 0 && player.getYaw() == 0, "Mouse yaw must not steer charge");
+		GoatCharge.steer(player, 1);
+		GoatCharge.tick(player);
+		context.assertTrue(Math.abs(state.goatHeading - 1.8F) < 0.001, "Right input must turn by 1.8 degrees per tick");
+		GoatCharge.steer(player, 0);
+		GoatCharge.tick(player);
+		context.assertTrue(Math.abs(state.goatHeading - 1.8F) < 0.001, "Released input must keep heading");
+		GoatCharge.steer(player, -1);
+		GoatCharge.tick(player);
+		context.assertTrue(Math.abs(state.goatHeading) < 0.001, "Left input must reverse the turn");
+		GoatCharge.steer(player, 100);
+		context.assertTrue(state.goatSteering == -1, "Invalid turn values must be rejected");
+		state.goatSteeringExpires = player.getServerWorld().getTime();
+		GoatCharge.tick(player);
+		context.assertTrue(state.goatSteering == 0, "Stale input must expire");
+		state.mastery.put(HeadType.GOAT, 1000);
+		float before = state.goatHeading;
+		GoatCharge.steer(player, 1);
+		GoatCharge.tick(player);
+		context.assertTrue(Math.abs(state.goatHeading - before - 3) < 0.001, "Mastery must preserve faster keyboard steering");
+		double speedBeforeStop = player.getVelocity().horizontalLength();
 		SkillHandler.onSkill(player, false);
 		SkillHandler.onSkill(player, true);
-		context.assertTrue(player.getVelocity().horizontalLength() < 0.1, "Second R must brake the charge");
+		context.assertTrue(state.goatDashTicks == 0 && Math.abs(player.getVelocity().horizontalLength() - speedBeforeStop * 0.2) < 0.0001, "Second R must brake the charge");
 		SkillHandler.onSkill(player, false);
 		SkillHandler.onSkill(player, true);
-		context.assertTrue(player.getVelocity().horizontalLength() < 0.1, "Cooldown must prevent restarting immediately");
+		context.assertTrue(state.goatDashTicks == 0 && Math.abs(player.getVelocity().horizontalLength() - speedBeforeStop * 0.2) < 0.0001, "Cooldown must prevent restarting immediately");
+		context.complete();
+	}
+
+	@GameTest(templateName = EMPTY_STRUCTURE)
+	public void rabbitCeilingPreservesPositionAndHeading(TestContext context) {
+		var player = context.createMockCreativeServerPlayerInWorld();
+		player.equipStack(EquipmentSlot.HEAD, new ItemStack(HeadItems.item(HeadType.RABBIT)));
+		var pos = context.getAbsolutePos(new BlockPos(2, 2, 2));
+		player.refreshPositionAndAngles(pos.getX() + 0.5, pos.getY() + 81, pos.getZ() + 0.5, 73, 12);
+		player.setOnGround(false);
+		player.setVelocity(0.4, 1, 0.6);
+		var state = PlayerHeadAccess.state(player);
+		state.rabbitAirborne = true;
+		state.rabbitLaunchY = pos.getY();
+		double x = player.getX(), z = player.getZ();
+		RabbitMovement.tick(player);
+		context.assertTrue(player.getX() == x && player.getZ() == z, "Height correction must preserve horizontal position");
+		context.assertTrue(player.getYaw() == 73 && player.getPitch() == 12, "Height correction must preserve view direction");
+		context.assertTrue(player.getY() == state.rabbitLaunchY + 80, "Ceiling must remain at eighty blocks");
+		context.assertTrue(player.getVelocity().x == 0.4 && player.getVelocity().z == 0.6, "Height correction must preserve horizontal velocity");
 		context.complete();
 	}
 
@@ -58,6 +130,7 @@ public class HeadDepthTest implements FabricGameTest {
 		player.setOnGround(true);
 		RabbitMovement.jump(player);
 		double first = player.getVelocity().y;
+		context.assertTrue(player.getAttributeValue(net.minecraft.entity.attribute.EntityAttributes.GENERIC_MOVEMENT_SPEED) > 0.1, "First jump must already grant a speed bonus");
 		RabbitMovement.jump(player);
 		context.assertTrue(player.getVelocity().y == first, "Airborne requests cannot add another impulse");
 		player.setOnGround(true);
@@ -65,6 +138,15 @@ public class HeadDepthTest implements FabricGameTest {
 		RabbitMovement.jump(player);
 		context.assertTrue(player.getVelocity().y > first, "Second timely jump must be higher");
 		context.assertTrue(player.getAttributeValue(net.minecraft.entity.attribute.EntityAttributes.GENERIC_MOVEMENT_SPEED) > 0.1, "Repeated jumps must increase movement speed");
+		var sky = player.getServer().getAdvancementLoader().get(net.minecraft.util.Identifier.of("mc_head_function", "rabbit_sky"));
+		for (int jump = 3; jump <= 17; jump++) {
+			player.setOnGround(true);
+			RabbitMovement.tick(player);
+			RabbitMovement.jump(player);
+			context.assertTrue(PlayerHeadAccess.state(player).rabbitChain == Math.min(jump, 16), "Chain must cap at sixteen");
+			context.assertTrue(player.getAdvancementTracker().getProgress(sky).isDone() == (jump >= 16), "Skybound must unlock at sixteen, not eight");
+		}
+		context.assertTrue(Math.abs(player.getAttributeValue(net.minecraft.entity.attribute.EntityAttributes.GENERIC_MOVEMENT_SPEED) - 0.295) < 0.0001, "Maximum rabbit speed must reach 2.95x");
 		SkillHandler.onSkill(player, true);
 		player.setOnGround(true);
 		RabbitMovement.tick(player);

@@ -6,12 +6,14 @@ import com.nakami.mcheadfunction.rule.HeadDepthRules;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.particle.ParticleTypes;
+import net.minecraft.network.packet.s2c.play.PositionFlag;
+import java.util.Set;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.Identifier;
 
 public final class RabbitMovement {
-	private static final Identifier SPEED = Identifier.of("mc_head_function", "rabbit_momentum");
+	public static final Identifier SPEED = Identifier.of("mc_head_function", "rabbit_momentum");
 	private RabbitMovement() { }
 	public static void requestJump(ServerPlayerEntity player) {
 		// Jump input precedes that tick's movement packet; consume it after the server sees landing.
@@ -28,7 +30,7 @@ public final class RabbitMovement {
 		}
 		state.rabbitJumpRequestTicks = 0;
 		int window = HeadMastery.mastered(player, HeadType.RABBIT) ? 8 : HeadDepthRules.RABBIT_WINDOW;
-		state.rabbitChain = now - state.rabbitLandedAt <= window ? Math.min(8, state.rabbitChain + 1) : 1;
+		state.rabbitChain = now - state.rabbitLandedAt <= window ? Math.min(HeadDepthRules.RABBIT_MAX_CHAIN, state.rabbitChain + 1) : 1;
 		state.rabbitAirborne = true;
 		state.rabbitFallProtected = true;
 		state.rabbitLaunchY = player.getY();
@@ -36,13 +38,13 @@ public final class RabbitMovement {
 		player.setOnGround(false);
 		player.velocityModified = false;
 		var impulse = player.getVelocity();
-		net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, new com.nakami.mcheadfunction.net.RabbitLeapS2CPayload(impulse.x, impulse.y, impulse.z));
+		net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, new com.nakami.mcheadfunction.net.RabbitLeapS2CPayload(impulse.y));
 		player.fallDistance = 0;
 		updateSpeed(player);
-		HeadSounds.play(player, SoundEvents.ENTITY_RABBIT_JUMP, 0.6F, 0.8F + state.rabbitChain * 0.1F);
+		HeadSounds.play(player, SoundEvents.ENTITY_RABBIT_JUMP, 0.6F, 0.8F + state.rabbitChain * 0.05F);
 		player.getServerWorld().spawnParticles(ParticleTypes.CLOUD, player.getX(), player.getY(), player.getZ(), 12, 0.35, 0.05, 0.35, 0.04);
 		HeadMastery.practice(player, HeadType.RABBIT);
-		if (state.rabbitChain == 8) HeadMastery.challenge(player, "rabbit_sky");
+		if (state.rabbitChain == HeadDepthRules.RABBIT_MAX_CHAIN) HeadMastery.challenge(player, "rabbit_sky");
 	}
 	public static void tick(ServerPlayerEntity player) {
 		var state = PlayerHeadAccess.state(player);
@@ -53,10 +55,13 @@ public final class RabbitMovement {
 			state.rabbitLandedAt = now;
 			state.rabbitFallProtected = false;
 		}
-		if (state.rabbitAirborne && player.getY() > state.rabbitLaunchY + 100) {
-			player.requestTeleport(player.getX(), state.rabbitLaunchY + 100, player.getZ());
+		if (state.rabbitAirborne && player.getY() > state.rabbitLaunchY + HeadDepthRules.RABBIT_MAX_HEIGHT) {
+			// Correct only height: absolute X/Z teleports also erase client momentum.
+			// This API takes absolute targets and computes relative packet offsets itself.
+			player.networkHandler.requestTeleport(player.getX(), state.rabbitLaunchY + HeadDepthRules.RABBIT_MAX_HEIGHT, player.getZ(), player.getYaw(), player.getPitch(),
+				Set.of(PositionFlag.X, PositionFlag.Z, PositionFlag.X_ROT, PositionFlag.Y_ROT));
 			player.setVelocity(player.getVelocity().multiply(1, 0, 1));
-			player.velocityModified = true;
+			player.velocityModified = false;
 		}
 		int window = HeadMastery.mastered(player, HeadType.RABBIT) ? 8 : HeadDepthRules.RABBIT_WINDOW;
 		if (HeadLookups.worn(player) != HeadType.RABBIT || player.hasVehicle() || player.isTouchingWater()

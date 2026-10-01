@@ -14,7 +14,6 @@ public final class BeeCommand {
 		var state = PlayerHeadAccess.state(player);
 		if (target != null && owned(target, player)) target = null;
 		state.beeTarget = target == null ? null : target.getUuid();
-		state.beeTargetTicks = target == null ? 0 : 300;
 		final LivingEntity chosen = target;
 		for (BeeEntity bee : bees(player)) assign(bee, chosen);
 		HeadSounds.play(player, SoundEvents.BLOCK_BEEHIVE_WORK, 0.8F, chosen == null ? 0.7F : 1.5F);
@@ -28,7 +27,7 @@ public final class BeeCommand {
 		var world = player.getServerWorld();
 		LivingEntity chosen = state.beeTarget == null ? null : world.getEntity(state.beeTarget) instanceof LivingEntity living ? living : null;
 		if (state.beeTarget != null && (chosen == null || !chosen.isAlive() || chosen.isSpectator()
-			|| state.beeTargetTicks <= 0 || chosen.squaredDistanceTo(player) > 48 * 48)) {
+			|| chosen.squaredDistanceTo(player) > 48 * 48)) {
 			command(player, null);
 			chosen = null;
 		}

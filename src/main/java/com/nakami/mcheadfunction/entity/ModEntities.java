@@ -26,6 +26,12 @@ public final class ModEntities {
 			.build("head_ammo")
 	);
 
+	public static final EntityType<FrogTongueEntity> FROG_TONGUE = Registry.register(
+		Registries.ENTITY_TYPE, McHeadFunction.id("frog_tongue"),
+		EntityType.Builder.<FrogTongueEntity>create(FrogTongueEntity::new, SpawnGroup.MISC)
+			.dimensions(0.25F, 0.25F).maxTrackingRange(8).trackingTickInterval(1).build("frog_tongue")
+	);
+
 	private ModEntities() {
 	}
 

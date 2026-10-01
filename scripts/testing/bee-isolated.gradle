@@ -1,0 +1,14 @@
+// Run bee regressions independently of other in-progress gameplay work.
+allprojects {
+    layout.buildDirectory.set(file('build/bee-isolated'))
+    afterEvaluate {
+        tasks.named('processGametestResources').configure {
+            doLast {
+                def manifest = file("${destinationDir}/fabric.mod.json")
+                def data = new groovy.json.JsonSlurper().parse(manifest)
+                data.entrypoints['fabric-gametest'] = ['com.nakami.mcheadfunction.BeeGameplayTest']
+                manifest.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(data))
+            }
+        }
+    }
+}

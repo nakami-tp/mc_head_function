@@ -25,6 +25,12 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, M extend
 
 	@Inject(method = "render", at = @At("HEAD"))
 	private void mhf$hideHead(T entity, float yaw, float tickDelta, MatrixStack matrices, VertexConsumerProvider consumers, int light, CallbackInfo ci) {
+		matrices.push();
+		int crush = ((com.nakami.mcheadfunction.head.HeadCrushAccess) entity).mhf$crushTicks();
+		if (crush > 0) {
+			float amount = Math.min(1, crush / 5.0F);
+			matrices.scale(1 + 0.45F * amount, 1 - 0.82F * amount, 1 + 0.45F * amount);
+		}
 		setHeadVisible(entity, !HeadlessAccess.isHeadless(entity));
 	}
 
@@ -34,6 +40,7 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, M extend
 			NeckCapRenderer.render(entity, matrices, consumers, light);
 		}
 		setHeadVisible(entity, true);
+		matrices.pop();
 	}
 
 	private void setHeadVisible(T entity, boolean visible) {

@@ -55,6 +55,33 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 	private int activeTicks;
 	private double traveled;
 	private double rollTraveled;
+	private int rollTicks;
+	private Vec3d rollDirection = new Vec3d(0, 0, 1);
+	private static final TrackedData<Float> ROLL_DISTANCE = DataTracker.registerData(ThrownHeadEntity.class, TrackedDataHandlerRegistry.FLOAT);
+	private float previousRollDistance;
+	private double rollSpeed = 0.2;
+	private double rollDropDistance;
+	private boolean rolledOnGround;
+	private int impactCooldown;
+	public static final float GOLEM_SCALE = 8;
+	public static final float GOLEM_SIZE = 5F;
+	public static final double GOLEM_SPEED = 0.20;
+
+	public static final double GOLEM_RANGE = 40;
+	public float getRollDistance(float delta) {
+		return net.minecraft.util.math.MathHelper.lerp(delta, previousRollDistance, dataTracker.get(ROLL_DISTANCE));
+	}
+
+	public boolean isGiantRoller() { return isActive() && getHeadType() == HeadType.IRON_GOLEM; }
+
+	@Override public net.minecraft.entity.EntityDimensions getDimensions(net.minecraft.entity.EntityPose pose) {
+		return isGiantRoller() ? net.minecraft.entity.EntityDimensions.fixed(GOLEM_SIZE, GOLEM_SIZE) : super.getDimensions(pose);
+	}
+
+	@Override public void onTrackedDataSet(TrackedData<?> data) {
+		super.onTrackedDataSet(data);
+		if (ACTIVE.equals(data)) calculateDimensions();
+	}
 	private Block eatBlock;
 	private final ArrayDeque<BlockPos> eatQueue = new ArrayDeque<>();
 	private int eatCount;
@@ -79,6 +106,7 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 		builder.add(HEAD_TYPE, HeadType.PIG.name());
 		builder.add(ACTIVE, false);
 		builder.add(BITE_TICKS, 0);
+		builder.add(ROLL_DISTANCE, 0F);
 	}
 
 	public void setHeadType(HeadType type) {
@@ -123,9 +151,11 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 		if (recycled) {
 			return;
 		}
+		previousRollDistance = dataTracker.get(ROLL_DISTANCE);
 		if (getWorld().isClient() && age % 2 == 0) {
 			getWorld().addParticle(HeadEffects.particle(getHeadType()), getX(), getY() + 0.2, getZ(), 0, 0.015, 0);
 		}
+		if (!getWorld().isClient() && !isActive() && style == HeadType.ThrowStyle.GOLEM_ROLL) enterActive();
 		if (isActive()) {
 			// ThrownEntity.tick uses setPosition, which bypasses solid-block collision.
 			baseTick();
@@ -139,7 +169,10 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 			if (isRemoved()) return;
 			if (getHeadType() != HeadType.ENDERMAN) {
 				applyGravity();
+				Vec3d beforeMove = getPos();
+				boolean wasOnGround = isOnGround();
 				move(MovementType.SELF, getVelocity());
+				if (isGiantRoller() && !getWorld().isClient()) finishRollMove(beforeMove, wasOnGround);
 				double drag = getHeadType() == HeadType.ZOMBIE && isOnGround() ? 0.6 : 0.99;
 				setVelocity(getVelocity().multiply(drag, 0.98, drag));
 			}
@@ -326,28 +359,24 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 	}
 
 	private void enterActive() {
+		Vec3d launch = getVelocity().multiply(1, 0, 1);
 		setActive(true);
 		setVelocity(Vec3d.ZERO);
 		setNoGravity(false);
 		activeTicks = 0;
 		if (style == HeadType.ThrowStyle.GOLEM_ROLL) {
-			golemShockwave();
-			Vec3d dir = Vec3d.ZERO;
-			if (getOwner() != null) {
-				dir = getOwner().getRotationVec(1).multiply(1, 0, 1);
-			}
-			if (dir.lengthSquared() < 0.01) {
-				dir = new Vec3d(0, 0, 1);
-			}
-			setNoGravity(false);
-			setVelocity(dir.normalize().multiply(0.45));
+			if (launch.lengthSquared() < 0.001 && getOwner() != null) launch = getOwner().getRotationVec(1).multiply(1, 0, 1);
+			rollDirection = launch.lengthSquared() < 0.001 ? new Vec3d(0, 0, 1) : launch.normalize();
+			setYaw((float) Math.toDegrees(Math.atan2(-rollDirection.x, rollDirection.z)));
+			setVelocity(rollDirection.multiply(GOLEM_SPEED));
+			HeadSounds.play(this, SoundEvents.BLOCK_ANVIL_LAND, 1.5F, 0.5F);
 		}
 	}
 
 	private void tickActive() {
 		activeTicks++;
 		if (getBiteTicks() > 0) dataTracker.set(BITE_TICKS, getBiteTicks() - 1);
-		if (activeTicks >= HeadRules.ACTIVE_MAX_TICKS) {
+		if (style != HeadType.ThrowStyle.GOLEM_ROLL && activeTicks >= HeadRules.ACTIVE_MAX_TICKS) {
 			recycle();
 			return;
 		}
@@ -468,37 +497,69 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 		return HeadRules.canEndermanEat(false, blockEntity != null, chestLike);
 	}
 
-	private void golemShockwave() {
-		if (!(getWorld() instanceof ServerWorld world)) {
-			return;
+	private void tickRoll() {
+		if (!(getWorld() instanceof ServerWorld world)) return;
+		if (impactCooldown > 0) impactCooldown--;
+		if (isOnGround()) rollSpeed = Math.max(GOLEM_SPEED, rollSpeed - 0.001);
+		double step = Math.min(rollSpeed, GOLEM_RANGE - rollTraveled);
+		setVelocity(rollDirection.multiply(step).add(0, getVelocity().y, 0));
+		Box sweep = getBoundingBox().stretch(rollDirection.multiply(step));
+		// Leave the supporting surface intact; crush the volume above the roller's feet.
+		for (BlockPos pos : BlockPos.iterate(BlockPos.ofFloored(sweep.minX, sweep.minY + 0.05, sweep.minZ),
+			BlockPos.ofFloored(sweep.maxX, sweep.maxY, sweep.maxZ))) {
+			BlockState state = world.getBlockState(pos);
+			var shape = state.getCollisionShape(world, pos);
+			boolean support = !shape.isEmpty() && pos.getY() + shape.getMax(Direction.Axis.Y) <= getY() + 0.001;
+			if (!support && !state.isAir() && !(state.getBlock() instanceof net.minecraft.block.FluidBlock) && state.getHardness(world, pos) >= 0) {
+				if (world.breakBlock(pos, true, this)) practice();
+			}
 		}
-		explodeAround(0.0F, false);
-		hurtNearby(0, false);
-		for (LivingEntity living : nearbyLiving(5)) {
-			living.addVelocity(0, 1.15, 0);
-			living.velocityModified = true;
+		for (LivingEntity living : world.getEntitiesByClass(LivingEntity.class, sweep, this::canHarm)) {
+			((com.nakami.mcheadfunction.head.HeadCrushAccess) living).mhf$crush(com.nakami.mcheadfunction.head.HeadCrushAccess.DURATION_TICKS);
+			living.setVelocity(living.getVelocity().multiply(0.15, 1, 0.15));
+			if (activeTicks % 10 == 1 && living.damage(world.getDamageSources().thrown(this, getOwner()), 4)) {
+				practice();
+				// No launch impulse: the target stays beneath the rolling mass.
+				living.setVelocity(0, Math.min(0, living.getVelocity().y), 0);
+				living.velocityModified = true;
+				world.spawnParticles(ParticleTypes.CRIT, living.getX(), living.getY() + 0.2, living.getZ(), 10, 0.5, 0.1, 0.5, 0.03);
+				HeadSounds.play(this, SoundEvents.ENTITY_IRON_GOLEM_ATTACK, 0.8F, 0.5F);
+			}
 		}
-		world.playSound(null, getBlockPos(), SoundEvents.ENTITY_IRON_GOLEM_ATTACK, getSoundCategory(), 1.0F, 0.7F);
+		if (activeTicks % 4 == 0) {
+			world.spawnParticles(new net.minecraft.particle.BlockStateParticleEffect(ParticleTypes.BLOCK, Blocks.IRON_BLOCK.getDefaultState()),
+				getX(), getY() + 0.15, getZ(), 18, 2.6, 0.12, 2.6, 0.06);
+			world.spawnParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE, getX(), getY() + 0.1, getZ(), 8, 2.5, 0.1, 2.5, 0.01);
+		}
+		if (activeTicks % 12 == 0) {
+			HeadSounds.play(this, SoundEvents.BLOCK_GRINDSTONE_USE, 1.0F, 0.5F);
+			HeadSounds.play(this, SoundEvents.ENTITY_IRON_GOLEM_STEP, 1.5F, 0.5F);
+		}
 	}
 
-	private void tickRoll() {
-		if (!(getWorld() instanceof ServerWorld world)) {
-			return;
+	private void finishRollMove(Vec3d before, boolean wasOnGround) {
+		double moved = getPos().subtract(before).horizontalLength();
+		// Visual rotation follows all movement, but flight spends no rolling lifetime or range.
+		dataTracker.set(ROLL_DISTANCE, dataTracker.get(ROLL_DISTANCE) + (float) moved);
+		if (wasOnGround && isOnGround() && moved > 0.000001) {
+			rollTraveled += moved;
+			rollTicks++;
 		}
-		if (activeTicks <= 10 && activeTicks % 2 == 0) HeadEffects.ring(world, getPos(), activeTicks * 0.5);
-		if (activeTicks % 8 == 0 && getVelocity().horizontalLengthSquared() > 0.01) {
-			HeadSounds.play(this, SoundEvents.BLOCK_GRINDSTONE_USE, 0.15F, 0.7F);
+		double drop = Math.max(0, before.y - getY());
+		rollDropDistance += drop;
+		// Convert descent into rolling momentum; retain it briefly on the next flat section.
+		if (rolledOnGround && drop > 0 && rollDropDistance < 4) {
+			rollSpeed = Math.min(0.4, Math.sqrt(rollSpeed * rollSpeed + 0.05 * drop));
 		}
-		rollTraveled += getVelocity().horizontalLength();
-		for (LivingEntity living : nearbyLiving(1.2)) {
-			living.damage(world.getDamageSources().thrown(this, getOwner()), 6);
-			Vec3d push = living.getPos().subtract(getPos()).normalize().multiply(1.4).add(0, 0.4, 0);
-			living.addVelocity(push.x, push.y, push.z);
-			living.velocityModified = true;
+		if (isOnGround()) {
+			if (rollDropDistance >= 4 && impactCooldown == 0) {
+				com.nakami.mcheadfunction.entity.GolemImpact.land(this, (ServerWorld) getWorld(), rollDropDistance);
+				impactCooldown = 40;
+			}
+			rolledOnGround = true;
+			rollDropDistance = 0;
 		}
-		if (rollTraveled >= 8 || horizontalCollision) {
-			recycle();
-		}
+		if (rollTraveled >= GOLEM_RANGE - 0.001 || rollTicks >= 600 || horizontalCollision) recycle();
 	}
 
 	private void explodeAndRecycle(float radius) {
@@ -633,6 +694,14 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 		nbt.putInt("activeTicks", activeTicks);
 		nbt.putDouble("traveled", traveled);
 		nbt.putDouble("rollTraveled", rollTraveled);
+		nbt.putInt("rollTicks", rollTicks);
+		nbt.putFloat("rollVisualDistance", dataTracker.get(ROLL_DISTANCE));
+		nbt.putDouble("rollX", rollDirection.x);
+		nbt.putDouble("rollZ", rollDirection.z);
+		nbt.putDouble("rollSpeed", rollSpeed);
+		nbt.putDouble("rollDropDistance", rollDropDistance);
+		nbt.putBoolean("rolledOnGround", rolledOnGround);
+		nbt.putInt("impactCooldown", impactCooldown);
 		nbt.putInt("eatCount", eatCount);
 		nbt.putInt("biteCooldown", biteCooldown);
 		if (eatBlock != null) {
@@ -660,6 +729,15 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 		activeTicks = nbt.getInt("activeTicks");
 		traveled = nbt.getDouble("traveled");
 		rollTraveled = nbt.getDouble("rollTraveled");
+		rollTicks = nbt.getInt("rollTicks");
+		float visualDistance = nbt.contains("rollVisualDistance") ? nbt.getFloat("rollVisualDistance") : (float) rollTraveled;
+		dataTracker.set(ROLL_DISTANCE, visualDistance);
+		previousRollDistance = visualDistance;
+		rollSpeed = nbt.contains("rollSpeed") ? Math.max(GOLEM_SPEED, Math.min(0.4, nbt.getDouble("rollSpeed"))) : GOLEM_SPEED;
+		rollDropDistance = nbt.getDouble("rollDropDistance");
+		rolledOnGround = nbt.getBoolean("rolledOnGround");
+		impactCooldown = nbt.getInt("impactCooldown");
+		if (nbt.contains("rollX")) rollDirection = new Vec3d(nbt.getDouble("rollX"), 0, nbt.getDouble("rollZ")).normalize();
 		eatCount = nbt.getInt("eatCount");
 		biteCooldown = nbt.getInt("biteCooldown");
 		if (nbt.contains("eatBlock")) {

@@ -29,8 +29,10 @@ public final class HeadDepthClientValidation implements ClientModInitializer {
 	private boolean opening, setup, finished, wasGround = true;
 	private volatile boolean ready;
 	private volatile String failure;
+	private int airTicks;
+	private double sprintLaunchGain, maxChainAirSpeed;
 	private int ticks, phase, jumpCount, targetId = -1, stunticks, marks;
-	private double launchY, peak, maximumHeight;
+	private double launchY, peak, maximumHeight, previousHorizontalSpeed;
 	private final List<Double> heights = new ArrayList<>();
 	private final List<String> sounds = new ArrayList<>();
 	private final List<Integer> goats = new ArrayList<>();
@@ -89,29 +91,62 @@ public final class HeadDepthClientValidation implements ClientModInitializer {
 				check(HeadProgressHud.progress != null && HeadProgressHud.progress.points()[HeadType.PIG.ordinal()] == 1000, "Mastery HUD failed to sync");
 				check(com.nakami.mcheadfunction.progression.HeadMastery.mastered(client.player, HeadType.PIG), "Client domain mastery failed to sync");
 				capture(client, "depth-mastery.png");
-				finish(client, "PASS rabbitHeights=" + heights + " max=" + maximumHeight + " stunFrames=" + stunticks + " targetFrames=" + marks + " ramSounds=" + ramSounds + " gallopSounds=" + gallopSounds + " stunSounds=" + stunSounds + " beeSounds=" + beeSounds);
+				finish(client, "PASS rabbitHeights=" + heights + " max=" + maximumHeight + " sprintGain=" + sprintLaunchGain + " maxAirSpeed=" + maxChainAirSpeed + " stunFrames=" + stunticks + " targetFrames=" + marks + " ramSounds=" + ramSounds + " gallopSounds=" + gallopSounds + " stunSounds=" + stunSounds + " beeSounds=" + beeSounds);
 			}
 		} catch (Throwable e) { finish(client, "FAIL " + e); }
 	}
 	private void rabbit(MinecraftClient client) {
+		if (ticks >= 20 && jumpCount == 0) client.options.forwardKey.setPressed(true);
 		if (ticks < 30) return;
 		check(HeadLookups.worn(client.player) == HeadType.RABBIT, "Rabbit equipment did not sync");
-		client.options.jumpKey.setPressed(jumpCount < 8);
+		client.options.jumpKey.setPressed(jumpCount < 16);
 		boolean ground = client.player.isOnGround();
 		if (wasGround && !ground) {
 			jumpCount++;
+			airTicks = 0;
+			if (jumpCount == 1) {
+				double speed = client.player.getVelocity().horizontalLength();
+				System.out.println("[RABBIT-SPEED] before=" + previousHorizontalSpeed + " after=" + speed);
+				check(previousHorizontalSpeed > 0.1 && speed >= previousHorizontalSpeed * 0.9,
+					"Rabbit launch lost forward momentum: before=" + previousHorizontalSpeed + " after=" + speed);
+				client.options.forwardKey.setPressed(false);
+			}
+			if (jumpCount == 2) {
+				sprintLaunchGain = client.player.getVelocity().horizontalLength() - previousHorizontalSpeed;
+				check(sprintLaunchGain > 0.12, "Rabbit sprint launch lost vanilla boost: " + sprintLaunchGain);
+				client.options.forwardKey.setPressed(false);
+				client.options.sprintKey.setPressed(false);
+				client.player.setSprinting(false);
+			}
 			launchY = 100;
 			peak = client.player.getY();
 		}
+		if (!ground) {
+			airTicks++;
+			if (jumpCount == 16) {
+				client.options.forwardKey.setPressed(true);
+				if (airTicks >= 50) {
+					maxChainAirSpeed = client.player.getVelocity().horizontalLength();
+					check(maxChainAirSpeed > 0.35, "Rabbit speed bonus missing in air: " + maxChainAirSpeed);
+				}
+			}
+		}
 		if (!ground) { peak = Math.max(peak, client.player.getY()); maximumHeight = Math.max(maximumHeight, client.player.getY() - launchY); }
-		check(client.player.getY() <= 200.1, "Rabbit exceeded 100-block ceiling: " + client.player.getY());
-		if (jumpCount == 8 && !ground && Math.abs(client.player.getVelocity().y) < 0.08) capture(client, "depth-rabbit-apex.png");
+		check(client.player.getY() <= 180.1, "Rabbit exceeded 80-block ceiling: " + client.player.getY());
+		if (jumpCount == 16 && !ground && Math.abs(client.player.getVelocity().y) < 0.08) capture(client, "depth-rabbit-apex.png");
 		if (!wasGround && ground) {
 			heights.add(peak - launchY);
+			check(Math.abs(peak - launchY - com.nakami.mcheadfunction.rule.HeadDepthRules.rabbitHeight(jumpCount)) < 0.1,
+				"Incorrect height for jump " + jumpCount + ": " + heights);
+			if (jumpCount == 1) {
+				client.options.forwardKey.setPressed(true);
+				client.options.sprintKey.setPressed(true);
+			}
 			check(client.player.getHealth() >= 19, "Rabbit leap caused fall damage");
-			if (jumpCount >= 8) {
-				check(maximumHeight > 99 && maximumHeight <= 100.1, "Eighth jump did not reach 100 blocks: " + heights);
-				System.out.println("[HEAD-DEPTH-RABBIT] heights=" + heights);
+			if (jumpCount >= 16) {
+				check(maximumHeight > 79 && maximumHeight <= 80.1, "Sixteenth jump did not reach 80 blocks: " + heights);
+				System.out.println("[HEAD-DEPTH-RABBIT] heights=" + heights + " sprintGain=" + sprintLaunchGain + " maxAirSpeed=" + maxChainAirSpeed);
+				client.options.forwardKey.setPressed(false);
 				client.options.jumpKey.setPressed(false);
 				phase = 1; ticks = 0;
 				onServer(client, () -> {
@@ -129,6 +164,7 @@ public final class HeadDepthClientValidation implements ClientModInitializer {
 				});
 			}
 		}
+		previousHorizontalSpeed = client.player.getVelocity().horizontalLength();
 		wasGround = ground;
 	}
 	private void goat(MinecraftClient client) {
@@ -195,7 +231,7 @@ public final class HeadDepthClientValidation implements ClientModInitializer {
 	private static void capture(MinecraftClient client, String name) { ScreenshotRecorder.saveScreenshot(client.runDirectory, name, client.getFramebuffer(), message -> {}); }
 	private static void check(boolean result, String reason) { if (!result) throw new IllegalStateException(reason); }
 	private void finish(MinecraftClient client, String result) {
-		finished = true; client.options.jumpKey.setPressed(false);
+		finished = true; client.options.jumpKey.setPressed(false); client.options.forwardKey.setPressed(false); client.options.sprintKey.setPressed(false);
 		System.out.println("[HEAD-DEPTH-VALIDATION] " + result);
 		try { Files.writeString(Path.of("result.txt"), result + "\n"); Files.write(Path.of("sound-events.txt"), sounds); } catch (Exception e) { throw new RuntimeException(e); }
 		client.scheduleStop();

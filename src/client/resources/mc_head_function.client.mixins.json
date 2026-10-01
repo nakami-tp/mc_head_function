@@ -3,12 +3,17 @@
 	"package": "com.nakami.mcheadfunction.client.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
+		"GolemCameraMixin",
 		"AnimalModelAccessor",
 		"LivingEntityRendererMixin",
 		"MinecraftClientMixin",
 		"ModelPartAccessor",
 		"HeadFeatureRendererMixin",
-		"RabbitJumpMixin"
+		"RabbitJumpMixin",
+		"RabbitAirMovementMixin",
+		"GoatCameraMixin",
+		"GoatLookMixin",
+		"GoatInputMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

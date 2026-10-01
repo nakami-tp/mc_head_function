@@ -18,11 +18,15 @@ public final class PlayerHeadState {
 	public int frogCooldown;
 	public int llamaCooldown;
 	public int endermanDodgeCooldown;
+	public final com.nakami.mcheadfunction.wear.GoatMining goatMining = new com.nakami.mcheadfunction.wear.GoatMining();
 	public int goatDashTicks;
 	public Vec3d goatDashOrigin;
 	public final Set<UUID> goatHit = new HashSet<>();
 	public final Map<UUID, Integer> wolfFleeRemaining = new HashMap<>();
 	public float goatHeading;
+	public float goatPitch;
+	public int goatSteering;
+	public long goatSteeringExpires;
 	public double goatSpeed;
 	public int goatCooldown;
 	public int rabbitChain;
@@ -32,7 +36,6 @@ public final class PlayerHeadState {
 	public double rabbitLaunchY;
 	public boolean rabbitFallProtected;
 	public UUID beeTarget;
-	public int beeTargetTicks;
 	public final java.util.EnumMap<HeadType, Integer> mastery = new java.util.EnumMap<>(HeadType.class);
 	public final java.util.EnumMap<HeadType, Long> lastPractice = new java.util.EnumMap<>(HeadType.class);
 	public int blazeHeat;
@@ -56,7 +59,6 @@ public final class PlayerHeadState {
 			lightningCharge++;
 		}
 		if (goatCooldown > 0) goatCooldown--;
-		if (beeTargetTicks > 0) beeTargetTicks--;
 		if (frogCooldown > 0) {
 			frogCooldown--;
 		}
@@ -77,12 +79,16 @@ public final class PlayerHeadState {
 	public void startGoatDash(Vec3d origin) {
 		goatDashTicks = com.nakami.mcheadfunction.rule.HeadDepthRules.GOAT_DURATION;
 		goatSpeed = 0.35;
+		goatSteering = 0;
+		goatSteeringExpires = 0;
 		goatDashOrigin = origin;
 		goatHit.clear();
 	}
 
 	public void clearGoatDash() {
+		goatMining.clear();
 		goatDashTicks = 0;
+		goatSteering = 0;
 		goatDashOrigin = null;
 		goatHit.clear();
 	}

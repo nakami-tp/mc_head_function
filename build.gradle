@@ -163,6 +163,33 @@ tasks.named('runCreeperValidation').configure {
 	}
 }
 
+// Giant iron roller regression scene, isolated from player saves.
+sourceSets {
+	golemValidation {
+		compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+		runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+	}
+}
+loom {
+	mods { golem_client_validation { sourceSet sourceSets.golemValidation } }
+	runs {
+		golemValidation {
+			client()
+			source sourceSets.golemValidation
+			runDir 'build/golem-validation'
+		}
+	}
+}
+tasks.named('runGolemValidation').configure {
+	doFirst { delete 'build/golem-validation/result.txt', 'build/golem-validation/screenshots' }
+	doLast {
+		def result = file('build/golem-validation/result.txt')
+		if (!result.exists() || !result.text.startsWith('PASS ')) {
+			throw new GradleException('Golem validation failed; see build/golem-validation/result.txt and logs.')
+		}
+	}
+}
+
 // Blaze heat, fire-ground and propagation validation in a disposable client world.
 sourceSets {
 	blazeValidation {
@@ -186,6 +213,87 @@ tasks.named('runBlazeValidation').configure {
 		def result = file('build/blaze-validation/result.txt')
 		if (!result.exists() || !result.text.startsWith('PASS ')) {
 			throw new GradleException('Blaze validation failed; see build/blaze-validation/result.txt and logs.')
+		}
+	}
+}
+
+// Goat block breaking and impact validation in a disposable client world.
+sourceSets {
+	goatValidation {
+		compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+		runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+	}
+}
+loom {
+	mods { goat_client_validation { sourceSet sourceSets.goatValidation } }
+	runs {
+		goatValidation {
+			client()
+			source sourceSets.goatValidation
+			runDir 'build/goat-validation'
+		}
+	}
+}
+tasks.named('runGoatValidation').configure {
+	doFirst { delete 'build/goat-validation/result.txt', 'build/goat-validation/screenshots' }
+	doLast {
+		def result = file('build/goat-validation/result.txt')
+		if (!result.exists() || !result.text.startsWith('PASS ')) {
+			throw new GradleException('Goat validation failed; see build/goat-validation/result.txt and logs.')
+		}
+	}
+}
+
+// Frog tongue animation and delivery validation in a disposable client world.
+sourceSets {
+	frogValidation {
+		compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+		runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+	}
+}
+loom {
+	mods { frog_client_validation { sourceSet sourceSets.frogValidation } }
+	runs {
+		frogValidation {
+			client()
+			source sourceSets.frogValidation
+			runDir 'build/frog-validation'
+		}
+	}
+}
+tasks.named('runFrogValidation').configure {
+	doFirst { delete 'build/frog-validation/result.txt', 'build/frog-validation/screenshots' }
+	doLast {
+		def result = file('build/frog-validation/result.txt')
+		if (!result.exists() || !result.text.startsWith('PASS ')) {
+			throw new GradleException('Frog validation failed; see build/frog-validation/result.txt and logs.')
+		}
+	}
+}
+
+// Sustained rabbit movement, isolated from the player's client and saves.
+sourceSets {
+	rabbitValidation {
+		compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+		runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+	}
+}
+loom {
+	mods { rabbit_client_validation { sourceSet sourceSets.rabbitValidation } }
+	runs {
+		rabbitValidation {
+			client()
+			source sourceSets.rabbitValidation
+			runDir 'build/rabbit-validation'
+		}
+	}
+}
+tasks.named('runRabbitValidation').configure {
+	doFirst { delete 'build/rabbit-validation/result.txt', 'build/rabbit-validation/screenshots' }
+	doLast {
+		def result = file('build/rabbit-validation/result.txt')
+		if (!result.exists() || !result.text.startsWith('PASS ')) {
+			throw new GradleException('Rabbit validation failed; see build/rabbit-validation/result.txt and logs.')
 		}
 	}
 }
