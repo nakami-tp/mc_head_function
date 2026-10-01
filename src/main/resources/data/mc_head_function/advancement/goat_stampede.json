@@ -1,0 +1,23 @@
+{
+  "display": {
+    "icon": {
+      "id": "mc_head_function:goat_head"
+    },
+    "title": {
+      "translate": "advancement.mc_head_function.goat_stampede.title"
+    },
+    "description": {
+      "translate": "advancement.mc_head_function.goat_stampede.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "achieved": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "parent": "mc_head_function:first_use"
+}

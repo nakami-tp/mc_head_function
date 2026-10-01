@@ -25,20 +25,42 @@ public class McHeadFunctionClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.RabbitLeapS2CPayload.ID,
+			(payload, context) -> context.client().execute(() -> {
+				var player = context.client().player;
+				if (player == null) return;
+				player.setVelocity(payload.x(), payload.y(), payload.z());
+				player.setOnGround(false);
+				player.fallDistance = 0;
+			}));
 		EntityRendererRegistry.register(ModEntities.THROWN_HEAD, HeadProjectileRenderer::new);
 		net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register(HeadHud::render);
+		net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register(HeadProgressHud::render);
+		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.HeadProgressS2CPayload.ID,
+			(payload, context) -> context.client().execute(() -> {
+				HeadProgressHud.progress = payload;
+				if (context.client().player != null) {
+					var state = com.nakami.mcheadfunction.head.PlayerHeadAccess.state(context.client().player);
+					for (var type : com.nakami.mcheadfunction.head.HeadType.values()) state.mastery.put(type, payload.points()[type.ordinal()]);
+				}
+			}));
 		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.HeadStatusS2CPayload.ID,
 			(payload, context) -> context.client().execute(() -> HeadHud.status = payload));
 		net.fabricmc.fabric.api.client.item.v1.ItemTooltipCallback.EVENT.register((stack, context, tooltipType, lines) -> {
 			var type = com.nakami.mcheadfunction.head.HeadItems.ofStack(stack);
 			if (type != null) {
+				if (HeadProgressHud.progress != null) {
+					int xp = HeadProgressHud.progress.points()[type.ordinal()];
+					lines.add(net.minecraft.text.Text.translatable("mastery.mc_head_function.progress", stack.getName(), xp, 1000).formatted(net.minecraft.util.Formatting.GOLD));
+					lines.add(net.minecraft.text.Text.translatable("mastery.mc_head_function." + type.itemPath()).formatted(xp >= 1000 ? net.minecraft.util.Formatting.GREEN : net.minecraft.util.Formatting.DARK_GRAY));
+				}
 				lines.add(net.minecraft.text.Text.translatable("head.mc_head_function." + type.itemPath() + ".throw").formatted(net.minecraft.util.Formatting.GRAY));
 				lines.add(net.minecraft.text.Text.translatable("head.mc_head_function." + type.itemPath() + ".wear", SKILL_KEY.getBoundKeyLocalizedText()).formatted(net.minecraft.util.Formatting.AQUA));
 			}
 		});
 		EntityRendererRegistry.register(ModEntities.HEAD_AMMO, HeadAmmoRenderer::new);
 		ClientPlayNetworking.registerGlobalReceiver(SonarS2CPayload.ID, (payload, context) ->
-			context.client().execute(() -> sonarTicks = HeadRules.SONAR_TICKS)
+			context.client().execute(() -> sonarTicks = payload.duration())
 		);
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			if (sonarTicks > 0) {
@@ -66,6 +88,7 @@ public class McHeadFunctionClient implements ClientModInitializer {
 			if (client.player == null) {
 				last = false;
 				HeadHud.status = null;
+				HeadProgressHud.progress = null;
 				sonarTicks = 0;
 				return;
 			}

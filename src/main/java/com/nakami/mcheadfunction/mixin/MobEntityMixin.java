@@ -30,9 +30,10 @@ public class MobEntityMixin {
 		}
 	}
 
-	@Inject(method = "tickNewAi", at = @At("HEAD"))
+	@Inject(method = "tickNewAi", at = @At("HEAD"), cancellable = true)
 	private void mhf$headlessAi(CallbackInfo ci) {
 		MobEntity self = (MobEntity) (Object) this;
+		if (com.nakami.mcheadfunction.wear.GoatCharge.isStunned(self)) { ci.cancel(); return; }
 		if (HeadlessAccess.isHeadless(self)) {
 			HeadlessAi.suppress(self, goalSelector, targetSelector);
 		}

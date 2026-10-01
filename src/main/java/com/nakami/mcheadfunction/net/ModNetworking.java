@@ -10,9 +10,14 @@ public final class ModNetworking {
 	}
 
 	public static void register() {
+		PayloadTypeRegistry.playS2C().register(RabbitLeapS2CPayload.ID, RabbitLeapS2CPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(RabbitJumpC2SPayload.ID, RabbitJumpC2SPayload.CODEC);
+		ServerPlayNetworking.registerGlobalReceiver(RabbitJumpC2SPayload.ID, (payload, context) ->
+			context.server().execute(() -> com.nakami.mcheadfunction.wear.RabbitMovement.requestJump(context.player())));
 		PayloadTypeRegistry.playC2S().register(ThrowHeadC2SPayload.ID, ThrowHeadC2SPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(HeadSkillC2SPayload.ID, HeadSkillC2SPayload.CODEC);
 		PayloadTypeRegistry.playS2C().register(HeadStatusS2CPayload.ID, HeadStatusS2CPayload.CODEC);
+		PayloadTypeRegistry.playS2C().register(HeadProgressS2CPayload.ID, HeadProgressS2CPayload.CODEC);
 		PayloadTypeRegistry.playS2C().register(SonarS2CPayload.ID, SonarS2CPayload.CODEC);
 		ServerPlayNetworking.registerGlobalReceiver(ThrowHeadC2SPayload.ID, (payload, context) ->
 			context.server().execute(() -> ThrowHandler.throwHeldHead(context.player()))

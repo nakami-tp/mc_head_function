@@ -10,6 +10,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import com.nakami.mcheadfunction.progression.HeadMastery;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -56,6 +57,7 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 	private int eatCount;
 	private int biteCooldown;
 	private boolean recycled;
+	private boolean practiced;
 
 	public ThrownHeadEntity(EntityType<? extends ThrownHeadEntity> type, World world) {
 		super(type, world);
@@ -158,6 +160,12 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 		super.tick();
 	}
 
+	private void practice() {
+		if (practiced || style == HeadType.ThrowStyle.KNOCK_OFF) return;
+		practiced = true;
+		if (getOwner() instanceof ServerPlayerEntity player) HeadMastery.practice(player, getHeadType());
+	}
+
 	private void pierceTick() {
 		ServerWorld world = (ServerWorld) getWorld();
 		Vec3d start = getPos();
@@ -180,13 +188,14 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 		BlockState state = world.getBlockState(pos);
 		if (!state.isAir() && state.getHardness(world, pos) >= 0 && !state.isOf(Blocks.BEDROCK)) {
 			world.breakBlock(pos, true, this);
+			practice();
 		}
 	}
 
 	private void damagePierceTargets(ServerWorld world, Vec3d point) {
 		Box box = new Box(point, point).expand(0.45);
 		for (LivingEntity living : world.getEntitiesByClass(LivingEntity.class, box, this::canHarm)) {
-			living.damage(world.getDamageSources().thrown(this, getOwner()), HeadRules.PIERCE_DAMAGE);
+			if (living.damage(world.getDamageSources().thrown(this, getOwner()), HeadRules.PIERCE_DAMAGE)) practice();
 		}
 	}
 
@@ -240,6 +249,7 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 			return;
 		}
 		Entity target = hit.getEntity();
+		if (!ownedBy(target)) practice();
 		switch (style) {
 			case DEFAULT, KNOCK_OFF -> {
 				if (target instanceof LivingEntity living && !ownedBy(living)) {
@@ -269,6 +279,7 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 		if (!(getWorld() instanceof ServerWorld) || recycled) {
 			return;
 		}
+		practice();
 		switch (style) {
 			case ZOMBIE_HOP, GOLEM_ROLL -> enterActive();
 			case ENDERMAN_EAT -> startEating(hit.getBlockPos());
@@ -393,6 +404,7 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 			eatCount++;
 			setPosition(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
 			if (eatCount >= HeadRules.ENDERMAN_EAT_MAX) {
+				if (getOwner() instanceof ServerPlayerEntity player) HeadMastery.challenge(player, "enderman_vein");
 				recycle();
 			}
 			return;
@@ -470,7 +482,8 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 		HeadSounds.play(this, SoundEvents.BLOCK_BEEHIVE_EXIT, 0.6F, 1.15F);
 		if (getWorld() instanceof ServerWorld world) {
 			UUID ownerId = getOwner() != null ? getOwner().getUuid() : null;
-			for (int i = 0; i < HeadRules.BEE_SUMMON_COUNT; i++) {
+			int count = getOwner() instanceof ServerPlayerEntity player && HeadMastery.mastered(player, HeadType.BEE) ? 4 : HeadRules.BEE_SUMMON_COUNT;
+			for (int i = 0; i < count; i++) {
 				BeeEntity bee = EntityType.BEE.create(world);
 				if (bee == null) {
 					continue;
@@ -491,7 +504,8 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 
 	private void sonarAndRecycle() {
 		if (getOwner() instanceof ServerPlayerEntity player) {
-			ServerPlayNetworking.send(player, new SonarS2CPayload());
+			practice();
+			ServerPlayNetworking.send(player, new SonarS2CPayload(HeadMastery.mastered(player, HeadType.BAT) ? 200 : 100));
 		}
 		recycle();
 	}
@@ -523,6 +537,7 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 			}
 			if (ignite) {
 				living.setOnFireFor(4);
+				practice();
 			}
 		}
 	}
@@ -568,6 +583,7 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 		nbt.putString("headType", getHeadType().name());
 		nbt.putString("style", style.name());
 		nbt.putBoolean("active", isActive());
+		nbt.putBoolean("practiced", practiced);
 		nbt.putInt("activeTicks", activeTicks);
 		nbt.putDouble("traveled", traveled);
 		nbt.putDouble("rollTraveled", rollTraveled);
@@ -594,6 +610,7 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 			style = HeadType.ThrowStyle.valueOf(nbt.getString("style"));
 		}
 		setActive(nbt.getBoolean("active"));
+		practiced = nbt.getBoolean("practiced");
 		activeTicks = nbt.getInt("activeTicks");
 		traveled = nbt.getDouble("traveled");
 		rollTraveled = nbt.getDouble("rollTraveled");

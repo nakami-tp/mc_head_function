@@ -32,7 +32,9 @@ public class SculkSensorBlockEntityMixin {
 		if (sensor == null) {
 			return;
 		}
-		if (HeadRules.sheepQuiets(player.squaredDistanceTo(sensor)) || HeadRules.sheepQuiets(pos.squaredDistanceTo(sensor))) {
+		double range = com.nakami.mcheadfunction.progression.HeadMastery.mastered(player, com.nakami.mcheadfunction.head.HeadType.SHEEP) ? 1 : 2;
+		if (player.squaredDistanceTo(sensor) > range * range || pos.squaredDistanceTo(sensor) > range * range) {
+			com.nakami.mcheadfunction.progression.HeadMastery.practice(player, com.nakami.mcheadfunction.head.HeadType.SHEEP);
 			cir.setReturnValue(false);
 		}
 	}

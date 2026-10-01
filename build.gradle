@@ -81,3 +81,30 @@ publishing {
 	repositories {
 	}
 }
+
+// Head-depth scenarios have their own world and do not replace existing client regressions.
+sourceSets {
+	depthValidation {
+		compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+		runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+	}
+}
+loom {
+	mods { head_depth_validation { sourceSet sourceSets.depthValidation } }
+	runs {
+		depthValidation {
+			client()
+			source sourceSets.depthValidation
+			runDir 'build/depth-validation'
+		}
+	}
+}
+tasks.named('runDepthValidation').configure {
+	doFirst { delete 'build/depth-validation/result.txt', 'build/depth-validation/screenshots' }
+	doLast {
+		def result = file('build/depth-validation/result.txt')
+		if (!result.exists() || !result.text.startsWith('PASS ')) {
+			throw new GradleException('Head depth client validation failed; see build/depth-validation/result.txt and logs.')
+		}
+	}
+}

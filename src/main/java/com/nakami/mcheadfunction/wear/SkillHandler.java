@@ -8,6 +8,7 @@ import com.nakami.mcheadfunction.head.PlayerHeadAccess;
 import com.nakami.mcheadfunction.head.PlayerHeadState;
 import com.nakami.mcheadfunction.rule.HeadRules;
 import java.util.List;
+import com.nakami.mcheadfunction.progression.HeadMastery;
 import com.nakami.mcheadfunction.head.HeadEffects;
 import com.nakami.mcheadfunction.head.HeadSounds;
 import net.minecraft.particle.DustParticleEffect;
@@ -39,8 +40,8 @@ public final class SkillHandler {
 	public static void onSkill(ServerPlayerEntity player, boolean pressed) {
 		PlayerHeadState state = PlayerHeadAccess.state(player);
 		boolean wasHeld = state.skillHeld;
-		state.skillHeld = pressed;
-		if (!pressed) {
+		state.skillHeld = pressed && !GoatCharge.isStunned(player) && player.isAlive() && !player.isSpectator();
+		if (!pressed || wasHeld || GoatCharge.isStunned(player) || !player.isAlive() || player.isSpectator()) {
 			return;
 		}
 		HeadType worn = HeadLookups.worn(player);
@@ -53,10 +54,9 @@ public final class SkillHandler {
 			}
 			case CHARGED_CREEPER -> lightning(player, state);
 			case CREEPER -> creeperAmmo(player, state);
-			case GOAT -> {
-				if (state.goatDashTicks == 0) HeadSounds.launch(player, HeadType.GOAT);
-				state.startGoatDash(player.getPos());
-			}
+			case GOAT -> GoatCharge.toggle(player);
+			case RABBIT -> RabbitMovement.reset(player);
+			case BEE -> BeeCommand.command(player, rayEntity(player, 24));
 			case FROG -> grab(player, state);
 			case LLAMA -> spit(player, state);
 			default -> {
@@ -76,6 +76,7 @@ public final class SkillHandler {
 		HeadEffects.line(player.getServerWorld(), player.getEyePos(), target.getEyePos(), net.minecraft.particle.ParticleTypes.ELECTRIC_SPARK);
 		HeadSounds.play(player, SoundEvents.BLOCK_RESPAWN_ANCHOR_DEPLETE.value(), 0.35F, 1.6F);
 		state.lightningCharge = 0;
+		HeadMastery.practice(player, HeadType.CHARGED_CREEPER);
 		ServerWorld world = player.getServerWorld();
 		var bolt = net.minecraft.entity.EntityType.LIGHTNING_BOLT.create(world);
 		if (bolt != null) {
@@ -134,12 +135,13 @@ public final class SkillHandler {
 		HeadEffects.line(player.getServerWorld(), player.getEyePos().add(0, -0.15, 0), hit.getPos(),
 			new DustParticleEffect(new Vector3f(0.95F, 0.35F, 0.48F), 0.8F));
 		HeadSounds.play(player, SoundEvents.ENTITY_FROG_TONGUE, 0.5F, 1.05F);
-		state.frogCooldown = HeadRules.FROG_COOLDOWN_TICKS;
+		state.frogCooldown = HeadMastery.mastered(player, HeadType.FROG) ? 10 : HeadRules.FROG_COOLDOWN_TICKS;
 		ServerWorld world = player.getServerWorld();
 		if (hit instanceof EntityHitResult entityHit) {
 			Entity entity = entityHit.getEntity();
 			if (entity instanceof PlayerEntity && entity != player) {
 				pull(entity, player);
+				HeadMastery.practice(player, HeadType.FROG);
 				return;
 			}
 			if (entity instanceof LivingEntity living) {
@@ -147,10 +149,12 @@ public final class SkillHandler {
 					return;
 				}
 				pull(living, player);
+				HeadMastery.practice(player, HeadType.FROG);
 				return;
 			}
 			if (entity instanceof ItemEntity item) {
 				giveOrDrop(player, item.getStack());
+				HeadMastery.practice(player, HeadType.FROG);
 				item.discard();
 			}
 			return;
@@ -165,8 +169,10 @@ public final class SkillHandler {
 		if (blockState.isAir() || blockState.getHardness(world, pos) < 0 || blockState.isOf(Blocks.BEDROCK)) {
 			return;
 		}
+		HeadMastery.practice(player, HeadType.FROG);
 		BlockEntity blockEntity = world.getBlockEntity(pos);
 		if (blockEntity instanceof net.minecraft.inventory.Inventory inventory) {
+			HeadMastery.challenge(player, "frog_unpack");
 			for (int i = 0; i < inventory.size(); i++) {
 				giveOrDrop(player, inventory.removeStack(i));
 			}
@@ -224,6 +230,9 @@ public final class SkillHandler {
 		EntityHitResult best = null;
 		double bestDist = Double.MAX_VALUE;
 		for (Entity entity : player.getWorld().getOtherEntities(player, box)) {
+			if (entity.isSpectator()) continue;
+			if (HeadLookups.worn(player) == HeadType.BEE && entity instanceof net.minecraft.entity.passive.BeeEntity
+				&& entity.getCommandTags().contains("mhf_owner:" + player.getUuid())) continue;
 			if (entity instanceof LivingEntity living && HeadlessAccess.isHeadless(living)) {
 				// still grabbable
 			}

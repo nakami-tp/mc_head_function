@@ -1,0 +1,23 @@
+{
+  "display": {
+    "icon": {
+      "id": "mc_head_function:rabbit_head"
+    },
+    "title": {
+      "translate": "advancement.mc_head_function.master_rabbit_head.title"
+    },
+    "description": {
+      "translate": "advancement.mc_head_function.master_rabbit_head.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "achieved": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "parent": "mc_head_function:first_use"
+}
