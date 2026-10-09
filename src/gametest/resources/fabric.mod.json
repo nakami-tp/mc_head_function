@@ -11,7 +11,8 @@
       "com.nakami.mcheadfunction.BlazeGameplayTest",
       "com.nakami.mcheadfunction.GolemGameplayTest",
       "com.nakami.mcheadfunction.FrogGameplayTest",
-      "com.nakami.mcheadfunction.BeeGameplayTest"
+      "com.nakami.mcheadfunction.BeeGameplayTest",
+      "com.nakami.mcheadfunction.HauntGameplayTest"
     ]
   }
 }

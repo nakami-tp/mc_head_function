@@ -17,7 +17,9 @@ public class McHeadFunction implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+		com.nakami.mcheadfunction.haunt.HauntBlocks.register();
 		HeadItems.register();
+		com.nakami.mcheadfunction.haunt.HauntCommand.register();
 		ModEntities.register();
 		ModNetworking.register();
 		WearHandler.register();

@@ -55,6 +55,11 @@ public class McHeadFunctionClient implements ClientModInitializer {
 			}));
 		EntityRendererRegistry.register(ModEntities.FROG_TONGUE, FrogTongueRenderer::new);
 		EntityRendererRegistry.register(ModEntities.THROWN_HEAD, HeadProjectileRenderer::new);
+		EntityRendererRegistry.register(ModEntities.GHOST_HEAD, GhostHeadRenderer::new);
+		EntityRendererRegistry.register(ModEntities.POSSESSED_PROP, PossessedPropRenderer::new);
+		EntityRendererRegistry.register(ModEntities.HAUNT_TONGUE, HauntTongueRenderer::new);
+		net.minecraft.client.render.block.entity.BlockEntityRendererFactories.register(
+			com.nakami.mcheadfunction.haunt.HauntBlocks.TREE_ENTITY, HauntedTreeRenderer::new);
 		net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register(HeadHud::render);
 		net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register(HeadProgressHud::render);
 		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.HeadProgressS2CPayload.ID,
