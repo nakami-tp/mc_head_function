@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "segment=0": { "model": "mc_head_function:block/haunted_tree" },
+    "segment=1": { "model": "mc_head_function:block/haunted_tree" },
+    "segment=2": { "model": "mc_head_function:block/haunted_tree" },
+    "segment=3": { "model": "mc_head_function:block/haunted_tree" },
+    "segment=4": { "model": "mc_head_function:block/haunted_tree" },
+    "segment=5": { "model": "mc_head_function:block/haunted_tree" }
+  }
+}

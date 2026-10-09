@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " D ",
+    " L ",
+    " B "
+  ],
+  "key": {
+    "D": { "item": "minecraft:dead_bush" },
+    "L": { "item": "minecraft:dark_oak_log" },
+    "B": { "item": "minecraft:bone_block" }
+  },
+  "result": {
+    "id": "mc_head_function:haunted_tree",
+    "count": 1
+  }
+}

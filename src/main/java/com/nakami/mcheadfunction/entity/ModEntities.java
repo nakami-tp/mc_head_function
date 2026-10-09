@@ -31,6 +31,21 @@ public final class ModEntities {
 		EntityType.Builder.<FrogTongueEntity>create(FrogTongueEntity::new, SpawnGroup.MISC)
 			.dimensions(0.25F, 0.25F).maxTrackingRange(8).trackingTickInterval(1).build("frog_tongue")
 	);
+	public static final EntityType<com.nakami.mcheadfunction.haunt.GhostHeadEntity> GHOST_HEAD = Registry.register(
+		Registries.ENTITY_TYPE, McHeadFunction.id("ghost_head"),
+		EntityType.Builder.<com.nakami.mcheadfunction.haunt.GhostHeadEntity>create(com.nakami.mcheadfunction.haunt.GhostHeadEntity::new, SpawnGroup.MISC)
+			.dimensions(0.5F, 0.5F).maxTrackingRange(12).trackingTickInterval(1).build("ghost_head")
+	);
+	public static final EntityType<com.nakami.mcheadfunction.haunt.PossessedPropEntity> POSSESSED_PROP = Registry.register(
+		Registries.ENTITY_TYPE, McHeadFunction.id("possessed_prop"),
+		EntityType.Builder.<com.nakami.mcheadfunction.haunt.PossessedPropEntity>create(com.nakami.mcheadfunction.haunt.PossessedPropEntity::new, SpawnGroup.MISC)
+			.dimensions(0.9F, 0.9F).maxTrackingRange(10).trackingTickInterval(1).build("possessed_prop")
+	);
+	public static final EntityType<com.nakami.mcheadfunction.haunt.HauntTongueEntity> HAUNT_TONGUE = Registry.register(
+		Registries.ENTITY_TYPE, McHeadFunction.id("haunt_tongue"),
+		EntityType.Builder.<com.nakami.mcheadfunction.haunt.HauntTongueEntity>create(com.nakami.mcheadfunction.haunt.HauntTongueEntity::new, SpawnGroup.MISC)
+			.dimensions(0.25F, 0.25F).maxTrackingRange(8).trackingTickInterval(1).build("haunt_tongue")
+	);
 
 	private ModEntities() {
 	}

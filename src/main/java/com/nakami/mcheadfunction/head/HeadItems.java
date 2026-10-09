@@ -42,6 +42,7 @@ public final class HeadItems {
 				for (HeadType type : HeadType.values()) {
 					entries.add(item(type));
 				}
+				entries.add(com.nakami.mcheadfunction.haunt.HauntBlocks.ITEM);
 			})
 			.build()
 		);
