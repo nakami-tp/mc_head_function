@@ -1,11 +1,10 @@
 package com.nakami.mcheadfunction.haunt;
 
-import com.nakami.mcheadfunction.McHeadFunction;
-import com.nakami.mcheadfunction.entity.ModEntities;
 import com.nakami.mcheadfunction.head.HeadEffects;
 import com.nakami.mcheadfunction.head.HeadSounds;
 import com.nakami.mcheadfunction.rule.HeadDepthRules;
 import com.nakami.mcheadfunction.rule.HeadRules;
+import com.nakami.mcheadfunction.rule.HauntRules;
 import com.nakami.mcheadfunction.rule.HauntRules.HostKind;
 import net.minecraft.block.AbstractFurnaceBlock;
 import net.minecraft.block.Block;
@@ -19,11 +18,7 @@ import net.minecraft.entity.EntityType;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.decoration.ArmorStandEntity;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.vehicle.AbstractMinecartEntity;
-import net.minecraft.particle.ParticleTypes;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.BlockPos;
@@ -166,54 +161,73 @@ public final class HauntBehaviors {
 		if (pos == null) return;
 		BlockState state = world.getBlockState(pos);
 		if (!(state.getBlock() instanceof AbstractFurnaceBlock)) return;
-		LivingEntity target = nearest(world, Vec3d.ofCenter(pos), 8, ghost);
-		int cycle = ghost.age % 70;
-		boolean spray = cycle < 30;
-		world.setBlockState(pos, state.with(AbstractFurnaceBlock.LIT, spray));
-		if (!spray || target == null) return;
-		Vec3d to = target.getBoundingBox().getCenter().subtract(Vec3d.ofCenter(pos));
-		Direction facing = Direction.getFacing(to.x, 0, to.z);
-		if (state.contains(AbstractFurnaceBlock.FACING)) world.setBlockState(pos, world.getBlockState(pos).with(AbstractFurnaceBlock.FACING, facing));
-		Vec3d eye = Vec3d.ofCenter(pos).add(Vec3d.of(facing.getVector()).multiply(0.55));
-		if (!world.getFluidState(BlockPos.ofFloored(eye)).isEmpty()) return;
-		if (ghost.age % 10 == 0 && HauntBehaviors.inCone(eye, to.normalize(), target.getBoundingBox().getCenter(), 6, 0.28)
-			&& canHarm(ghost, target)) {
-			var key = RegistryKey.of(RegistryKeys.DAMAGE_TYPE, McHeadFunction.id("blaze_fire"));
-			if (target.damage(new net.minecraft.entity.damage.DamageSource(world.getRegistryManager().get(RegistryKeys.DAMAGE_TYPE).entryOf(key), ghost), 2)) {
-				target.setOnFireFor(4);
-			}
-		}
-		if (ghost.age % 2 == 0) HeadEffects.line(world, eye, eye.add(to.normalize().multiply(6)), ParticleTypes.SMALL_FLAME);
+		if (!state.get(AbstractFurnaceBlock.LIT)) world.setBlockState(pos, state.with(AbstractFurnaceBlock.LIT, true));
+		if (ghost.age % 25 == 0) world.playSound(null, pos, SoundEvents.BLOCK_FIRE_AMBIENT, net.minecraft.sound.SoundCategory.BLOCKS, 0.7F, 0.7F);
+		if (ghost.age % 17 == 0) world.playSound(null, pos, SoundEvents.BLOCK_CAMPFIRE_CRACKLE, net.minecraft.sound.SoundCategory.BLOCKS, 0.4F, 0.85F);
+	}
+
+	static void lightFurnace(ServerWorld world, GhostHeadEntity ghost) {
+		furnace(world, ghost);
 	}
 
 	private static void minecart(ServerWorld world, GhostHeadEntity ghost) {
 		if (!(ghost.host() instanceof AbstractMinecartEntity cart)) return;
 		cart.setNoGravity(true);
-		Vec3d vel = cart.getVelocity();
-		if (vel.horizontalLengthSquared() < 0.01) {
-			double a = world.random.nextDouble() * Math.PI * 2;
-			vel = new Vec3d(Math.cos(a), 0, Math.sin(a)).multiply(0.2);
+		Vec3d home = Vec3d.ofCenter(ghost.treePos());
+		double cartX = cart.getX() - home.x;
+		double cartZ = cart.getZ() - home.z;
+		boolean occupied = cart.hasPassengers();
+		var riders = occupied ? java.util.List.<LivingEntity>of()
+			: world.getEntitiesByClass(LivingEntity.class, cart.getBoundingBox().expand(HauntRules.CART_RIDER_RANGE),
+				e -> canBoard(cart, e));
+		double[] riderX = new double[riders.size()];
+		double[] riderZ = new double[riders.size()];
+		for (int i = 0; i < riders.size(); i++) {
+			riderX[i] = riders.get(i).getX() - home.x;
+			riderZ[i] = riders.get(i).getZ() - home.z;
 		}
-		Vec3d dir = vel.multiply(1, 0, 1);
-		if (dir.lengthSquared() < 0.0001) dir = new Vec3d(1, 0, 0);
-		dir = dir.normalize();
-		double speed = Math.min(0.8, vel.horizontalLength() + 0.03);
-		cart.setVelocity(dir.x * speed, 0, dir.z * speed);
-		cart.velocityModified = true;
-		cart.setPosition(cart.getX() + dir.x * speed, cart.getY(), cart.getZ() + dir.z * speed);
-		BlockPos front = BlockPos.ofFloored(cart.getPos().add(dir.multiply(0.8)));
+		if (HauntRules.cartArrived(cartX, cartZ, ghost.dest().x - home.x, ghost.dest().z - home.z)) {
+			var next = HauntRules.cartWaypoint(new java.util.Random(world.random.nextLong()), cartX, cartZ, riderX, riderZ);
+			ghost.setDest(home.add(next.x(), 0, next.z()));
+		}
+		Vec3d vel = cart.getVelocity();
+		double heading = vel.horizontalLengthSquared() < 0.0001
+			? world.random.nextDouble() * Math.PI * 2
+			: Math.atan2(vel.z, vel.x);
+		double wander = (world.random.nextDouble() - 0.5) * 2 * HauntRules.CART_WANDER_TURN;
+		heading = HauntRules.cartHeading(heading, wander, cartX, cartZ,
+			ghost.dest().x - home.x, ghost.dest().z - home.z, occupied, riderX, riderZ);
+		BlockPos front = BlockPos.ofFloored(cart.getPos().add(Math.cos(heading) * 0.8, 0, Math.sin(heading) * 0.8));
 		BlockState hit = world.getBlockState(front);
 		if (!hit.isAir() && !hit.isOf(HauntBlocks.TREE)) {
 			float hardness = hit.getHardness(world, front);
 			if (hardness >= 0 && hardness <= 3) world.breakBlock(front, true);
-			else cart.setVelocity(dir.multiply(-0.2).add((world.random.nextDouble() - 0.5) * 0.4, 0, (world.random.nextDouble() - 0.5) * 0.4));
+			else heading = HauntRules.cartBounce(heading, world.random.nextDouble());
 		}
-		for (LivingEntity living : world.getEntitiesByClass(LivingEntity.class, cart.getBoundingBox().expand(0.4), e -> canHarm(cart, e))) {
-			if (living.damage(world.getDamageSources().mobProjectile(cart, null), 4)) {
+		double speed = Math.min(HauntRules.CART_MAX_SPEED, vel.horizontalLength() + HauntRules.CART_ACCEL);
+		Vec3d dir = new Vec3d(Math.cos(heading), 0, Math.sin(heading));
+		Box sweep = cart.getBoundingBox().stretch(dir.x * speed, 0, dir.z * speed).expand(0.4);
+		for (LivingEntity living : world.getEntitiesByClass(LivingEntity.class, sweep, e -> canHarm(cart, e))) {
+			if (living.getVehicle() == cart) continue;
+			boolean boarded = HauntRules.cartBoards(occupied, canBoard(cart, living)) && living.startRiding(cart);
+			if (boarded) {
+				occupied = true;
+				HeadSounds.play(cart, SoundEvents.ENTITY_GOAT_RAM_IMPACT, 0.7F, 1.05F);
+				continue;
+			}
+			if (HauntRules.cartRams(boarded) && living.damage(world.getDamageSources().mobProjectile(cart, null), HauntRules.CART_HIT)) {
 				living.setVelocity(dir.multiply(0.65).add(0, 0.8, 0));
 				living.velocityModified = true;
 			}
 		}
+		cart.setVelocity(dir.x * speed, 0, dir.z * speed);
+		cart.velocityModified = true;
+		cart.setYaw((float) (Math.toDegrees(Math.atan2(dir.z, dir.x)) - 90));
+		cart.setPosition(cart.getX() + dir.x * speed, cart.getY(), cart.getZ() + dir.z * speed);
+	}
+
+	private static boolean canBoard(AbstractMinecartEntity cart, LivingEntity living) {
+		return canHarm(cart, living) && !living.hasVehicle();
 	}
 
 	private static void armor(ServerWorld world, GhostHeadEntity ghost) {
@@ -273,9 +287,4 @@ public final class HauntBehaviors {
 		return best;
 	}
 
-	private static boolean inCone(Vec3d origin, Vec3d look, Vec3d point, double range, double cos) {
-		Vec3d to = point.subtract(origin);
-		if (to.lengthSquared() > range * range || to.lengthSquared() < 0.01) return false;
-		return to.normalize().dotProduct(look) >= 1 - cos;
-	}
 }

@@ -38,6 +38,11 @@ public final class HeadRules {
 	public static final double PIERCE_DISTANCE = 8.0;
 	public static final double PIERCE_STEP = 0.25;
 	public static final float PIERCE_DAMAGE = 4.0F;
+	public static final int PIG_STUFFED_TICKS = 200;
+	public static final int PIG_SWALLOW_TICKS = 20;
+	public static final int PIG_SPIT_WINDUP = 6;
+	public static final float PIG_SPEED_FACTOR = -0.72F;
+	public static final float PIG_JUMP_FACTOR = -0.4F;
 
 	private HeadRules() {
 	}
@@ -64,6 +69,26 @@ public final class HeadRules {
 
 	public static float extraPigSaturation(float foodSaturation) {
 		return Math.max(0.0F, foodSaturation);
+	}
+
+	public static float pigSwallowProgress(int stuffedTicks, float delta) {
+		if (stuffedTicks <= 0) return 1;
+		float eaten = PIG_STUFFED_TICKS - (stuffedTicks - delta);
+		if (eaten <= 0) return 0;
+		if (eaten >= PIG_SWALLOW_TICKS) return 1;
+		return eaten / PIG_SWALLOW_TICKS;
+	}
+
+	public static float pigFatness(int stuffedTicks, float delta) {
+		if (stuffedTicks <= 0) return 0;
+		float remaining = stuffedTicks - delta;
+		if (remaining > PIG_STUFFED_TICKS - PIG_SWALLOW_TICKS) {
+			return 1 - (remaining - (PIG_STUFFED_TICKS - PIG_SWALLOW_TICKS)) / PIG_SWALLOW_TICKS;
+		}
+		if (remaining < PIG_SPIT_WINDUP) {
+			return Math.max(0, remaining / PIG_SPIT_WINDUP);
+		}
+		return 1;
 	}
 
 	public static boolean sheepQuiets(double distanceToSensorSq) {

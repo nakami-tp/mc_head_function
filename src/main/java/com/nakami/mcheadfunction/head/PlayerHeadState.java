@@ -45,6 +45,9 @@ public final class PlayerHeadState {
 	public boolean skillHeld;
 	public UUID markedTarget;
 	public UUID lastAmmo;
+	public int stuffedTicks;
+	public int savedFood = -1;
+	public float savedSaturation;
 
 	public void tick(boolean thunderstorm) {
 		if (creeperCharges < HeadRules.CREEPER_MAX_CHARGES) {
@@ -109,6 +112,9 @@ public final class PlayerHeadState {
 		if (markedTarget != null) {
 			tag.putUuid("marked", markedTarget);
 		}
+		tag.putInt("stuffedTicks", stuffedTicks);
+		tag.putInt("savedFood", savedFood);
+		tag.putFloat("savedSaturation", savedSaturation);
 		nbt.put("mhf", tag);
 	}
 
@@ -131,5 +137,8 @@ public final class PlayerHeadState {
 		if (tag.containsUuid("marked")) {
 			markedTarget = tag.getUuid("marked");
 		}
+		stuffedTicks = tag.getInt("stuffedTicks");
+		savedFood = tag.contains("savedFood") ? tag.getInt("savedFood") : -1;
+		savedSaturation = tag.getFloat("savedSaturation");
 	}
 }

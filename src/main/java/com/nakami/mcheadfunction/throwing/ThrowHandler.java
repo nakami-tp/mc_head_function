@@ -21,6 +21,10 @@ public final class ThrowHandler {
 		if (type == null) {
 			return;
 		}
+		if (type == HeadType.PIG) {
+			com.nakami.mcheadfunction.wear.PigSwallow.trySwallow(player);
+			return;
+		}
 		spawn(player, type, type.throwStyle, 1.4F, type.throwStyle == HeadType.ThrowStyle.DEFAULT);
 		if (!player.getAbilities().creativeMode) {
 			stack.decrement(1);

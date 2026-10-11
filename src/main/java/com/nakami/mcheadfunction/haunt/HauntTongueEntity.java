@@ -41,13 +41,15 @@ public final class HauntTongueEntity extends Entity {
 	private static final TrackedData<BlockPos> CHEST = DataTracker.registerData(HauntTongueEntity.class, TrackedDataHandlerRegistry.BLOCK_POS);
 	private static final TrackedData<Integer> TARGET = DataTracker.registerData(HauntTongueEntity.class, TrackedDataHandlerRegistry.INTEGER);
 	private static final TrackedData<Integer> MEAL_START = DataTracker.registerData(HauntTongueEntity.class, TrackedDataHandlerRegistry.INTEGER);
+	private static final TrackedData<Integer> BLOCK = DataTracker.registerData(HauntTongueEntity.class, TrackedDataHandlerRegistry.INTEGER);
 	private Entity target;
 	private Vec3d contact = Vec3d.ZERO;
 	private Vec3d swallowFrom;
+	private Vec3d grabFrom = Vec3d.ZERO;
 	private boolean preyNoClip;
 	private UUID interruptedPrey, possessionOwner;
 	private boolean abortOnLoad, knownChest = true;
-	private int eatWait;
+	private int biteTime;
 	private final List<ItemStack> cargo = new ArrayList<>();
 
 	public HauntTongueEntity(EntityType<? extends HauntTongueEntity> type, World world) {
@@ -76,12 +78,14 @@ public final class HauntTongueEntity extends Entity {
 		builder.add(CHEST, BlockPos.ORIGIN);
 		builder.add(TARGET, -1);
 		builder.add(MEAL_START, -1);
+		builder.add(BLOCK, 0);
 	}
 
 	public int elapsed() { return dataTracker.get(CLOCK); }
 	public BlockPos chest() { return dataTracker.get(CHEST); }
 	public int targetId() { return dataTracker.get(TARGET); }
 	public int mealTime() { return dataTracker.get(MEAL_START) < 0 ? -1 : elapsed() - dataTracker.get(MEAL_START); }
+	public BlockState carriedBlock() { return Block.getStateFromRawId(dataTracker.get(BLOCK)); }
 	public Vec3d mouth() {
 		if (!knownChest) return getPos();
 		var state = getWorld().getBlockState(chest());
@@ -151,6 +155,11 @@ public final class HauntTongueEntity extends Entity {
 			if (meal >= SWALLOW + CHEW) finish();
 			return;
 		}
+		if (!carriedBlock().isAir()) {
+			retractBite();
+			if (elapsed() >= MAX_PULL) finish();
+			return;
+		}
 		if (!cargo.isEmpty()) {
 			double t = MathHelper.clamp((elapsed() - EXTEND - HOLD) / (double) RETURN, 0, 1);
 			setPosition(contact.lerp(mouth(), t * t * (3 - 2 * t)));
@@ -160,13 +169,13 @@ public final class HauntTongueEntity extends Entity {
 		if (target == null || target.isRemoved() || target instanceof LivingEntity living && !canPull(living)) { finish(); return; }
 		contact = target.getBoundingBox().getCenter();
 		int time = elapsed();
-		if (time == 1) HeadSounds.play(this, SoundEvents.ENTITY_FROG_TONGUE, 1.2F, 1.1F);
 		var hit = obstacle(world);
 		if (hit != null) {
-			clearPath(world, hit);
+			biteBlock(world, hit);
 			if (time >= MAX_PULL) finish();
 			return;
 		}
+		if (time == 1) HeadSounds.play(this, SoundEvents.ENTITY_FROG_TONGUE, 1.2F, 1.1F);
 		if (time <= EXTEND) setPosition(mouth().lerp(contact, time / (double) EXTEND));
 		else if (time <= EXTEND + HOLD) {
 			setPosition(contact);
@@ -201,25 +210,40 @@ public final class HauntTongueEntity extends Entity {
 		return hit;
 	}
 
-	private void clearPath(ServerWorld world, BlockHitResult hit) {
+	private void biteBlock(ServerWorld world, BlockHitResult hit) {
 		Vec3d stop = hit.getPos();
-		Vec3d step = stop.subtract(getPos());
-		if (step.lengthSquared() > 0.04) {
-			eatWait = 0;
-			setPosition(step.length() <= 4 ? stop : getPos().add(step.normalize().multiply(4)));
+		biteTime++;
+		if (biteTime == 1) HeadSounds.play(this, SoundEvents.ENTITY_FROG_TONGUE, 1.2F, 1.1F);
+		if (biteTime <= EXTEND) {
+			setPosition(mouth().lerp(stop, biteTime / (double) EXTEND));
 			return;
 		}
 		setPosition(stop);
+		if (biteTime < EXTEND + HOLD) return;
 		BlockPos pos = hit.getBlockPos();
 		BlockState state = world.getBlockState(pos);
-		if (!HauntRules.canFrogChestEat(state.getHardness(world, pos) < 0, pos.equals(chest()) || state.isOf(HauntBlocks.TREE), world.getBlockEntity(pos) != null))
+		if (!HauntRules.canFrogChestEat(state.getHardness(world, pos) < 0, pos.equals(chest()) || state.isOf(HauntBlocks.TREE), world.getBlockEntity(pos) != null)) {
+			biteTime = EXTEND + HOLD;
 			return;
-		if (++eatWait < HOLD) return;
-		eatWait = 0;
+		}
 		if (!state.isToolRequired()) cargo.addAll(Block.getDroppedStacks(state, world, pos, world.getBlockEntity(pos), this, ItemStack.EMPTY));
 		world.removeBlock(pos, false);
-		HeadSounds.play(this, SoundEvents.ENTITY_FROG_EAT, 1.0F, 0.85F);
+		dataTracker.set(BLOCK, Block.getRawIdFromState(state));
+		grabFrom = stop;
+		biteTime = 0;
+		HeadSounds.play(this, SoundEvents.BLOCK_SLIME_BLOCK_HIT, 0.6F, 1.35F);
+	}
+
+	private void retractBite() {
+		biteTime++;
+		double t = MathHelper.clamp(biteTime / (double) RETURN, 0, 1);
+		setPosition(grabFrom.lerp(mouth(), t * t * (3 - 2 * t)));
+		if (biteTime < RETURN) return;
 		deliver();
+		dataTracker.set(BLOCK, 0);
+		biteTime = 0;
+		setPosition(mouth());
+		HeadSounds.play(this, SoundEvents.ENTITY_FROG_EAT, 1.0F, 0.85F);
 	}
 
 	private void capture(ItemEntity item) {

@@ -282,7 +282,12 @@ public class HeadGameplayTest implements FabricGameTest {
 			context.assertTrue(player.getMainHandStack().getCount() == 1, "Throw must consume one " + type);
 			var heads = context.getWorld().getEntitiesByClass(ThrownHeadEntity.class,
 				player.getBoundingBox().expand(8), head -> head.getHeadType() == type);
-			if (type == HeadType.BAT) {
+			if (type == HeadType.PIG) {
+				context.assertTrue(heads.isEmpty(), "Pig head must be swallowed, not thrown");
+				context.assertTrue(PlayerHeadAccess.state(player).stuffedTicks > 0, "Swallow must stuff the player");
+				com.nakami.mcheadfunction.wear.PigSwallow.spit(player, true);
+				context.getWorld().getEntitiesByClass(ItemEntity.class, player.getBoundingBox().expand(8), e -> true).forEach(ItemEntity::discard);
+			} else if (type == HeadType.BAT) {
 				context.assertTrue(heads.isEmpty(), "Bat head must recycle immediately");
 				var items = context.getWorld().getEntitiesByClass(ItemEntity.class,
 					player.getBoundingBox().expand(8), item -> item.getStack().isOf(HeadItems.item(HeadType.BAT)));
@@ -313,6 +318,39 @@ public class HeadGameplayTest implements FabricGameTest {
 	}
 
 	@GameTest(templateName = EMPTY_STRUCTURE)
+	public void pigHeadSwallowFillsThenSpitsAndRestoresHunger(TestContext context) {
+		var player = context.createMockCreativeServerPlayerInWorld();
+		player.getAbilities().creativeMode = false;
+		player.changeGameMode(net.minecraft.world.GameMode.SURVIVAL);
+		player.getHungerManager().setFoodLevel(6);
+		player.getHungerManager().setSaturationLevel(2);
+		float freeSpeed = player.getMovementSpeed();
+		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(HeadItems.item(HeadType.PIG), 2));
+		ThrowHandler.throwHeldHead(player);
+		context.assertTrue(player.getMainHandStack().getCount() == 1, "Swallow must consume one pig head");
+		context.assertTrue(context.getWorld().getEntitiesByClass(ThrownHeadEntity.class, player.getBoundingBox().expand(8), head -> true).isEmpty(),
+			"Swallow must not throw the pig head");
+		context.assertTrue(player.getHungerManager().getFoodLevel() == 20, "Swallow must fill hunger");
+		context.assertTrue(player.getHungerManager().getSaturationLevel() >= 19.9F, "Swallow must fill saturation");
+		context.assertTrue(PlayerHeadAccess.state(player).stuffedTicks == com.nakami.mcheadfunction.rule.HeadRules.PIG_STUFFED_TICKS,
+			"Swallow must start a ten-second stuffed state");
+		context.assertTrue(player.getMovementSpeed() < freeSpeed * 0.5F, "Stuffed walk must be slower");
+		ThrowHandler.throwHeldHead(player);
+		context.assertTrue(player.getMainHandStack().getCount() == 1, "A stuffed player cannot swallow another pig head");
+		for (int i = 0; i < com.nakami.mcheadfunction.rule.HeadRules.PIG_STUFFED_TICKS; i++) {
+			com.nakami.mcheadfunction.wear.PigSwallow.tick(player);
+		}
+		context.assertTrue(player.getHungerManager().getFoodLevel() == 6, "Spit must restore hunger");
+		context.assertTrue(player.getHungerManager().getSaturationLevel() == 2, "Spit must restore saturation");
+		context.assertTrue(PlayerHeadAccess.state(player).stuffedTicks == 0, "Spit must clear stuffed");
+		var items = context.getWorld().getEntitiesByClass(RecycledHeadItemEntity.class,
+			player.getBoundingBox().expand(8), item -> item.getStack().isOf(HeadItems.item(HeadType.PIG)));
+		context.assertTrue(items.size() == 1, "Spit must recycle the pig head");
+		context.assertTrue(Math.abs(player.getMovementSpeed() - freeSpeed) < 0.001F, "Spit must restore walk speed");
+		context.complete();
+	}
+
+	@GameTest(templateName = EMPTY_STRUCTURE)
 	public void pigHeadAddsSaturation(TestContext context) {
 		var player = context.createMockCreativeServerPlayerInWorld();
 		player.equipStack(EquipmentSlot.HEAD, new ItemStack(HeadItems.item(HeadType.PIG)));
@@ -329,15 +367,15 @@ public class HeadGameplayTest implements FabricGameTest {
 	@GameTest(templateName = EMPTY_STRUCTURE)
 	public void recycledHeadSurvivesExplosion(TestContext context) {
 		var player = context.createMockCreativeServerPlayerInWorld();
-		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(HeadItems.item(HeadType.PIG)));
+		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(HeadItems.item(HeadType.COW)));
 		player.getAbilities().creativeMode = false;
 		ThrowHandler.throwHeldHead(player);
 		var heads = context.getWorld().getEntitiesByClass(ThrownHeadEntity.class,
 			player.getBoundingBox().expand(8), head -> true);
-		context.assertTrue(!heads.isEmpty(), "Thrown pig head must exist");
+		context.assertTrue(!heads.isEmpty(), "Thrown cow head must exist");
 		heads.getFirst().recycle();
 		var items = context.getWorld().getEntitiesByClass(RecycledHeadItemEntity.class,
-			player.getBoundingBox().expand(8), item -> item.getStack().isOf(HeadItems.item(HeadType.PIG)));
+			player.getBoundingBox().expand(8), item -> item.getStack().isOf(HeadItems.item(HeadType.COW)));
 		context.assertTrue(items.size() == 1, "Recycle must drop an explosion-proof head");
 		var item = items.getFirst();
 		context.getWorld().createExplosion(null, item.getX(), item.getY(), item.getZ(), 4.0F, World.ExplosionSourceType.TNT);

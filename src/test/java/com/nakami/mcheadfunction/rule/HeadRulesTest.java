@@ -42,6 +42,28 @@ class HeadRulesTest {
 	}
 
 	@Test
+	void pigStuffedLastsTenSeconds() {
+		assertEquals(200, HeadRules.PIG_STUFFED_TICKS);
+	}
+
+	@Test
+	void pigSwallowStartsAtTheHandAndEndsInTheMouth() {
+		assertEquals(0.0F, HeadRules.pigSwallowProgress(HeadRules.PIG_STUFFED_TICKS, 0));
+		assertEquals(0.5F, HeadRules.pigSwallowProgress(HeadRules.PIG_STUFFED_TICKS - HeadRules.PIG_SWALLOW_TICKS / 2, 0), 0.001F);
+		assertEquals(1.0F, HeadRules.pigSwallowProgress(HeadRules.PIG_STUFFED_TICKS - HeadRules.PIG_SWALLOW_TICKS, 0));
+		assertEquals(1.0F, HeadRules.pigSwallowProgress(1, 0));
+	}
+
+	@Test
+	void pigFatnessInflatesThenHoldsThenDeflates() {
+		assertEquals(0.0F, HeadRules.pigFatness(0, 0));
+		assertEquals(0.0F, HeadRules.pigFatness(HeadRules.PIG_STUFFED_TICKS, 0));
+		assertEquals(1.0F, HeadRules.pigFatness(HeadRules.PIG_STUFFED_TICKS - HeadRules.PIG_SWALLOW_TICKS, 0));
+		assertEquals(1.0F, HeadRules.pigFatness(50, 0));
+		assertEquals(0.5F, HeadRules.pigFatness(3, 0), 0.001F);
+	}
+
+	@Test
 	void sheepQuietsWhenFarFromSensor() {
 		assertFalse(HeadRules.sheepQuiets(1.0));
 		assertTrue(HeadRules.sheepQuiets(4.01));

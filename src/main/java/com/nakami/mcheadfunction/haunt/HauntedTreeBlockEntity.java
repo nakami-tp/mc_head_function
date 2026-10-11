@@ -125,10 +125,12 @@ public final class HauntedTreeBlockEntity extends BlockEntity implements HauntTr
 		lastNight = HauntRules.night(server.getTimeOfDay());
 		until = HauntRules.hauntUntil(server.getTimeOfDay());
 		waves.clear();
+		int delay = 0;
 		for (HeadType type : hung()) {
 			HostKind kind = HauntRules.host(type);
-			if (kind != null) spawnWave(server, kind);
-			else spawnWander(server, type);
+			if (delay == 0) takeOff(server, kind, type);
+			else waves.add(new Wave(kind, type, delay));
+			delay += HauntRules.WAVE_GAP;
 		}
 		server.playSound(null, pos, SoundEvents.BLOCK_BELL_USE, SoundCategory.BLOCKS, 1.2F, 0.55F);
 		server.playSound(null, pos, SoundEvents.AMBIENT_CAVE.value(), SoundCategory.AMBIENT, 0.8F, 0.6F);
@@ -157,9 +159,15 @@ public final class HauntedTreeBlockEntity extends BlockEntity implements HauntTr
 		if (!tree.haunting) return;
 		tree.waves.removeIf(wave -> {
 			if (wave.delay-- > 0) return false;
-			tree.spawnWave(server, wave.kind);
+			tree.takeOff(server, wave.kind, wave.head);
 			return true;
 		});
+	}
+
+	private void takeOff(ServerWorld world, HostKind kind, HeadType type) {
+		world.playSound(null, pos, SoundEvents.PARTICLE_SOUL_ESCAPE.value(), SoundCategory.AMBIENT, 0.45F, 0.85F);
+		if (kind != null) spawnWave(world, kind);
+		else spawnWander(world, type);
 	}
 
 	private void spawnWave(ServerWorld world, HostKind kind) {
@@ -168,9 +176,10 @@ public final class HauntedTreeBlockEntity extends BlockEntity implements HauntTr
 		if (targets.isEmpty()) return;
 		Vec3d gather = HauntTargets.gather(pos, targets);
 		int hang = hangSlot(kind.head);
+		boolean lead = true;
 		for (HauntTargets.Target target : targets) {
-			var ghost = new GhostHeadEntity(world, this, hang, kind, gather, target);
-			world.spawnEntity(ghost);
+			world.spawnEntity(new GhostHeadEntity(world, this, hang, kind, gather, target, lead));
+			lead = false;
 		}
 	}
 
@@ -248,7 +257,12 @@ public final class HauntedTreeBlockEntity extends BlockEntity implements HauntTr
 
 	private static final class Wave {
 		final HostKind kind;
+		final HeadType head;
 		int delay;
-		Wave(HostKind kind, int delay) { this.kind = kind; this.delay = delay; }
+		Wave(HostKind kind, HeadType head, int delay) {
+			this.kind = kind;
+			this.head = head;
+			this.delay = delay;
+		}
 	}
 }

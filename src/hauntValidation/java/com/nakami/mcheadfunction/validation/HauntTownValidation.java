@@ -107,7 +107,7 @@ public final class HauntTownValidation implements ClientModInitializer {
 					check(tree.haunting(), "Generated town must support haunting");
 				});
 			}
-			if (ticks == 420) {
+			if (ticks == 530) {
 				capture(client, "06-haunting.png");
 				onServer(client, () -> {
 					var world = client.getServer().getOverworld();

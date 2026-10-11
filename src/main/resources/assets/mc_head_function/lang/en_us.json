@@ -36,7 +36,7 @@
   "head.mc_head_function.goat_head.wear": "%s: charge / stop · locked view, strafe keys steer · launch targets, stun on landing · break blocks by hardness",
   "head.mc_head_function.goat_head.throw": "Attack to throw: Ram and launch a target",
   "head.mc_head_function.pig_head.wear": "Food restores extra saturation",
-  "head.mc_head_function.pig_head.throw": "Attack to throw and recover on impact · Use to equip",
+  "head.mc_head_function.pig_head.throw": "Attack to swallow whole: fill hunger, grow a belly, spit it back after 10s · Use to equip",
   "head.mc_head_function.cow_head.wear": "Harmful effects last half as long",
   "head.mc_head_function.cow_head.throw": "Attack to throw and recover on impact · Use to equip",
   "head.mc_head_function.sheep_head.wear": "Reduced sculk detection range",

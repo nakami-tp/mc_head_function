@@ -5,11 +5,13 @@
 	"client": [
 		"GolemCameraMixin",
 		"ChestMealMixin",
+		"RestlessPumpkinBlockMixin",
 		"AnimalModelAccessor",
 		"LivingEntityRendererMixin",
 		"MinecraftClientMixin",
 		"ModelPartAccessor",
 		"HeadFeatureRendererMixin",
+		"HeldItemRendererMixin",
 		"RabbitJumpMixin",
 		"RabbitAirMovementMixin",
 		"GoatCameraMixin",

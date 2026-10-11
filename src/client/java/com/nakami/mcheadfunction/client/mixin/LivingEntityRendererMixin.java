@@ -1,7 +1,10 @@
 package com.nakami.mcheadfunction.client.mixin;
 
 import com.nakami.mcheadfunction.client.NeckCapRenderer;
+import com.nakami.mcheadfunction.client.PigSwallowEffects;
 import com.nakami.mcheadfunction.head.HeadlessAccess;
+import com.nakami.mcheadfunction.head.PigStuffedAccess;
+import com.nakami.mcheadfunction.rule.HeadRules;
 import java.util.Locale;
 import java.util.Map;
 import net.minecraft.client.model.ModelPart;
@@ -9,9 +12,12 @@ import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.entity.LivingEntityRenderer;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
 import net.minecraft.client.render.entity.model.EntityModel;
+import net.minecraft.client.render.entity.model.PlayerEntityModel;
 import net.minecraft.client.render.entity.model.SinglePartEntityModel;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.util.math.RotationAxis;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -45,7 +51,27 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, M extend
 			float amount = Math.min(1, crush / 5.0F);
 			matrices.scale(1 + 0.45F * amount, 1 - 0.82F * amount, 1 + 0.45F * amount);
 		}
+		if (entity instanceof PlayerEntity player) {
+			float fat = HeadRules.pigFatness(((PigStuffedAccess) player).mhf$stuffedTicks(), tickDelta);
+			if (fat > 0) {
+				matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees((float) Math.sin((entity.age + tickDelta) * 0.32) * 7 * fat));
+				matrices.scale(1 + 0.32F * fat, 1 + 0.08F * fat, 1 + 0.24F * fat);
+			}
+		}
 		setHeadVisible(entity, !HeadlessAccess.isHeadless(entity));
+	}
+
+	@Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/entity/model/EntityModel;setAngles(Lnet/minecraft/entity/Entity;FFFFF)V", shift = At.Shift.AFTER))
+	private void mhf$pigBelly(T entity, float yaw, float tickDelta, MatrixStack matrices, VertexConsumerProvider consumers, int light, CallbackInfo ci) {
+		if (!(entity instanceof PlayerEntity player) || !(model instanceof BipedEntityModel<?> biped)) return;
+		float fat = HeadRules.pigFatness(((PigStuffedAccess) player).mhf$stuffedTicks(), tickDelta);
+		mhf$fatParts(biped, fat);
+		float swallow = HeadRules.pigSwallowProgress(((PigStuffedAccess) player).mhf$stuffedTicks(), tickDelta);
+		if (swallow < 1) {
+			float raise = 1 - swallow;
+			biped.rightArm.pitch = -1.55F * raise + biped.rightArm.pitch * swallow;
+			biped.rightArm.yaw = -0.45F * raise;
+		}
 	}
 
 	@Inject(method = "render", at = @At("RETURN"))
@@ -53,10 +79,39 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, M extend
 		if (HeadlessAccess.isHeadless(entity)) {
 			NeckCapRenderer.render(entity, matrices, consumers, light);
 		}
+		if (entity instanceof PlayerEntity player) {
+			PigSwallowEffects.renderIncoming(matrices, consumers, player, light, tickDelta);
+			if (model instanceof BipedEntityModel<?> biped) mhf$fatParts(biped, 0);
+		}
 		setHeadVisible(entity, true);
 		entity.deathTime = mhf$previousDeathTime;
 		entity.hurtTime = mhf$previousHurtTime;
 		matrices.pop();
+	}
+
+	@Unique
+	private static void mhf$fatParts(BipedEntityModel<?> biped, float fat) {
+		mhf$scale(biped.body, 1 + 0.82F * fat, 1 + 0.42F * fat, 1 + 1.15F * fat);
+		biped.body.pivotZ = 2.4F * fat;
+		mhf$scale(biped.leftArm, 1 + 0.28F * fat, 1, 1 + 0.28F * fat);
+		mhf$scale(biped.rightArm, 1 + 0.28F * fat, 1, 1 + 0.28F * fat);
+		mhf$scale(biped.leftLeg, 1 + 0.22F * fat, 1, 1 + 0.28F * fat);
+		mhf$scale(biped.rightLeg, 1 + 0.22F * fat, 1, 1 + 0.28F * fat);
+		if (biped instanceof PlayerEntityModel<?> slim) {
+			mhf$scale(slim.jacket, 1 + 0.82F * fat, 1 + 0.42F * fat, 1 + 1.15F * fat);
+			slim.jacket.pivotZ = 2.4F * fat;
+			mhf$scale(slim.leftSleeve, 1 + 0.28F * fat, 1, 1 + 0.28F * fat);
+			mhf$scale(slim.rightSleeve, 1 + 0.28F * fat, 1, 1 + 0.28F * fat);
+			mhf$scale(slim.leftPants, 1 + 0.22F * fat, 1, 1 + 0.28F * fat);
+			mhf$scale(slim.rightPants, 1 + 0.22F * fat, 1, 1 + 0.28F * fat);
+		}
+	}
+
+	@Unique
+	private static void mhf$scale(ModelPart part, float x, float y, float z) {
+		part.xScale = x;
+		part.yScale = y;
+		part.zScale = z;
 	}
 
 	private void setHeadVisible(T entity, boolean visible) {
