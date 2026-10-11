@@ -4,11 +4,15 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.nakami.mcheadfunction.behead.BeheadingHandler;
 import com.nakami.mcheadfunction.head.HeadItems;
+import com.nakami.mcheadfunction.head.PigStuffedAccess;
 import com.nakami.mcheadfunction.head.PlayerHeadAccess;
 import com.nakami.mcheadfunction.head.PlayerHeadState;
 import com.nakami.mcheadfunction.wear.WearHandler;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.data.DataTracker;
+import net.minecraft.entity.data.TrackedData;
+import net.minecraft.entity.data.TrackedDataHandlerRegistry;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.component.type.FoodComponent;
 import net.minecraft.item.ItemStack;
@@ -21,13 +25,31 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(PlayerEntity.class)
-public abstract class PlayerEntityMixin implements PlayerHeadAccess {
+public abstract class PlayerEntityMixin implements PlayerHeadAccess, PigStuffedAccess {
+	@Unique
+	private static final TrackedData<Integer> MHF_STUFFED = DataTracker.registerData(PlayerEntity.class, TrackedDataHandlerRegistry.INTEGER);
+
 	@Unique
 	private final PlayerHeadState mhf$state = new PlayerHeadState();
 
 	@Override
 	public PlayerHeadState mhf$state() {
 		return mhf$state;
+	}
+
+	@Override
+	public int mhf$stuffedTicks() {
+		return ((PlayerEntity) (Object) this).getDataTracker().get(MHF_STUFFED);
+	}
+
+	@Override
+	public void mhf$setStuffedTicks(int ticks) {
+		((PlayerEntity) (Object) this).getDataTracker().set(MHF_STUFFED, ticks);
+	}
+
+	@Inject(method = "initDataTracker", at = @At("RETURN"))
+	private void mhf$stuffed(DataTracker.Builder builder, CallbackInfo ci) {
+		builder.add(MHF_STUFFED, 0);
 	}
 
 	@Inject(method = "writeCustomDataToNbt", at = @At("RETURN"))
@@ -38,6 +60,7 @@ public abstract class PlayerEntityMixin implements PlayerHeadAccess {
 	@Inject(method = "readCustomDataFromNbt", at = @At("RETURN"))
 	private void mhf$read(NbtCompound nbt, CallbackInfo ci) {
 		mhf$state.read(nbt);
+		mhf$setStuffedTicks(mhf$state.stuffedTicks);
 	}
 
 	@Inject(method = "attack", at = @At("HEAD"), cancellable = true)

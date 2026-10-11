@@ -378,3 +378,118 @@ tasks.named('runTreeValidation').configure {
 		}
 	}
 }
+
+// Pig swallow, stuffed belly and spit, isolated from player saves.
+sourceSets {
+	pigValidation {
+		compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+		runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+	}
+}
+loom {
+	mods { pig_client_validation { sourceSet sourceSets.pigValidation } }
+	runs {
+		pigValidation {
+			client()
+			source sourceSets.pigValidation
+			runDir 'build/pig-validation'
+		}
+	}
+}
+tasks.named('runPigValidation').configure {
+	doFirst { delete 'build/pig-validation/result.txt', 'build/pig-validation/screenshots' }
+	doLast {
+		def result = file('build/pig-validation/result.txt')
+		if (!result.exists() || !result.text.startsWith('PASS ')) {
+			throw new GradleException('Pig swallow validation failed; see build/pig-validation/result.txt and logs.')
+		}
+	}
+}
+
+// Restless pumpkin faces during a haunting, isolated from town and player saves.
+sourceSets {
+	pumpkinValidation {
+		compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+		runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+	}
+}
+loom {
+	mods { haunt_pumpkin_validation { sourceSet sourceSets.pumpkinValidation } }
+	runs {
+		pumpkinValidation {
+			client()
+			source sourceSets.pumpkinValidation
+			runDir 'build/pumpkin-validation'
+		}
+	}
+}
+tasks.named('runPumpkinValidation').configure {
+	doFirst { delete 'build/pumpkin-validation/result.txt', 'build/pumpkin-validation/screenshots' }
+	doLast {
+		def result = file('build/pumpkin-validation/result.txt')
+		if (!result.exists() || !result.text.startsWith('PASS ')) {
+			throw new GradleException('Pumpkin restless validation failed; see build/pumpkin-validation/result.txt and logs.')
+		}
+	}
+}
+
+// Ghost takeoff, split and enter, isolated from town and player saves.
+sourceSets {
+	ghostValidation {
+		compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+		runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+	}
+}
+loom {
+	mods { haunt_ghost_validation { sourceSet sourceSets.ghostValidation } }
+	runs {
+		ghostValidation {
+			client()
+			source sourceSets.ghostValidation
+			runDir 'build/ghost-validation'
+		}
+	}
+}
+sourceSets {
+	furnaceValidation {
+		compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+		runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+	}
+}
+loom {
+	mods { haunt_furnace_validation { sourceSet sourceSets.furnaceValidation } }
+	runs {
+		furnaceValidation {
+			client()
+			source sourceSets.furnaceValidation
+			runDir 'build/furnace-validation'
+		}
+	}
+}
+tasks.named('runFurnaceValidation').configure {
+	doFirst { delete 'build/furnace-validation/result.txt', 'build/furnace-validation/screenshots' }
+	doLast {
+		def result = file('build/furnace-validation/result.txt')
+		if (!result.exists() || !result.text.startsWith('PASS ')) {
+			throw new GradleException('Furnace overflow validation failed; see build/furnace-validation/result.txt and logs.')
+		}
+		def visual = providers.exec {
+			workingDir rootDir
+			commandLine 'python3', 'scripts/testing/check-furnace-overflow.py', 'build/furnace-validation/screenshots'
+		}
+		logger.lifecycle(visual.standardOutput.asText.get())
+		logger.lifecycle(visual.standardError.asText.get())
+		visual.result.get().assertNormalExitValue()
+	}
+}
+
+// Ghost takeoff, split and enter, isolated from town and player saves.
+tasks.named('runGhostValidation').configure {
+	doFirst { delete 'build/ghost-validation/result.txt', 'build/ghost-validation/screenshots' }
+	doLast {
+		def result = file('build/ghost-validation/result.txt')
+		if (!result.exists() || !result.text.startsWith('PASS ')) {
+			throw new GradleException('Ghost flight validation failed; see build/ghost-validation/result.txt and logs.')
+		}
+	}
+}

@@ -166,10 +166,15 @@ public final class ChestMealGameplayTest implements FabricGameTest {
 		var start = sheep.getPos();
 		c.getWorld().spawnEntity(new HauntTongueEntity(c.getWorld(), pos, inventory, sheep));
 		c.waitAndRun(9, () -> {
-			c.assertTrue(c.getWorld().getBlockState(first).isAir(), "Nearest path block is eaten first; first=" + c.getWorld().getBlockState(first));
+			c.assertTrue(c.getWorld().getBlockState(first).isAir(), "Nearest path block is latched first; first=" + c.getWorld().getBlockState(first));
 			c.assertTrue(c.getWorld().getBlockState(second).isOf(Blocks.OAK_FENCE), "Farther path block waits its turn");
 			c.assertTrue(sheep.getPos().squaredDistanceTo(start) < 0.25,
 				"Prey stays put until the path is clear; pos=" + sheep.getPos() + " start=" + start);
+		});
+		c.waitAndRun(16, () -> {
+			c.assertTrue(c.getWorld().getBlockState(second).isOf(Blocks.OAK_FENCE),
+				"The first bite must return to the chest before a second bite; second=" + c.getWorld().getBlockState(second));
+			c.assertTrue(sheep.getPos().squaredDistanceTo(start) < 0.25, "Prey is not pulled during a block return");
 		});
 		c.waitAndRun(150, () -> {
 			c.assertTrue(c.getWorld().getBlockState(first).isAir() && c.getWorld().getBlockState(second).isAir(), "The whole path is eaten");

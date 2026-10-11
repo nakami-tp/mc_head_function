@@ -52,6 +52,34 @@ public final class HeadSounds {
 		}
 	}
 
+	public static void swallow(Entity source) {
+		play(source, SoundEvents.ENTITY_GENERIC_EAT, 0.95F, 0.82F);
+		play(source, SoundEvents.ENTITY_PIG_AMBIENT, 0.8F, 1.2F);
+	}
+
+	public static void chew(Entity source) {
+		play(source, SoundEvents.ENTITY_GENERIC_EAT, 0.9F, 0.7F);
+	}
+
+	public static void gulp(Entity source) {
+		play(source, SoundEvents.ENTITY_GENERIC_DRINK, 0.75F, 0.86F);
+		play(source, SoundEvents.ENTITY_PIG_AMBIENT, 0.45F, 0.75F);
+	}
+
+	public static void belly(Entity source) {
+		play(source, SoundEvents.ENTITY_SLIME_SQUISH, 0.6F, 0.52F);
+	}
+
+	public static void stuffedOink(Entity source) {
+		play(source, SoundEvents.ENTITY_PIG_AMBIENT, 0.3F, 0.52F);
+	}
+
+	public static void spit(Entity source) {
+		play(source, SoundEvents.ENTITY_PLAYER_BURP, 0.95F, 0.6F);
+		play(source, SoundEvents.ENTITY_PIG_HURT, 0.45F, 1.35F);
+		play(source, SoundEvents.ENTITY_SLIME_SQUISH, 0.45F, 1.3F);
+	}
+
 	/** Recovery notifications go only to the wearer, not everyone nearby. */
 	public static void ready(ServerPlayerEntity player, HeadType type, boolean full) {
 		SoundEvent sound = type == HeadType.ENDERMAN ? SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME : SoundEvents.BLOCK_NOTE_BLOCK_PLING.value();

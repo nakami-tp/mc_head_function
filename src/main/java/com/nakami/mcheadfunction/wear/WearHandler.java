@@ -70,6 +70,7 @@ public final class WearHandler {
 			}
 			applyPassives(player, worn);
 			GoatCharge.tick(player);
+			PigSwallow.tick(player);
 			RabbitMovement.tick(player);
 			CreeperLaunch.tick(player);
 			com.nakami.mcheadfunction.blaze.BlazeFire.tickPlayer(player);

@@ -188,6 +188,31 @@ public class HauntGameplayTest implements FabricGameTest {
 		c.complete();
 	}
 
+	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt", tickLimit = 160)
+	public void aGhostSinksIntoItsHostBeforePossessing(TestContext c) {
+		var tree = plant(c, new BlockPos(4, 2, 4));
+		var world = c.getWorld();
+		var pumpkin = c.getAbsolutePos(new BlockPos(6, 2, 4));
+		world.setBlockState(pumpkin, Blocks.CARVED_PUMPKIN.getDefaultState());
+		var player = c.createMockPlayer(GameMode.SURVIVAL);
+		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.ZOMBIE_HEAD));
+		tree.hang(player, HeadType.ZOMBIE, player.getMainHandStack());
+		world.setTimeOfDay(HauntRules.MIDNIGHT);
+		tree.start(true);
+		c.waitAndRun(HauntRules.FLY_TICKS + HauntRules.SPLIT_TICKS, () -> {
+			c.assertTrue(world.getBlockState(pumpkin).isOf(Blocks.CARVED_PUMPKIN),
+				"The pumpkin must stay a block until the ghost finishes entering");
+			c.assertTrue(!world.getEntitiesByClass(GhostHeadEntity.class, new Box(tree.getPos()).expand(16), e -> true).isEmpty(),
+				"The ghost must already be on the way");
+		});
+		c.waitAndRun(HauntRules.possessionReadyAt() + 2, () -> {
+			c.assertTrue(world.getEntitiesByClass(PossessedPropEntity.class, new Box(pumpkin).expand(2), e -> true).size() == 1,
+				"The pumpkin becomes a host only after the ghost sinks in");
+			c.assertTrue(world.getBlockState(pumpkin).isAir(), "The original pumpkin block is gone after the enter");
+			c.complete();
+		});
+	}
+
 	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt", tickLimit = 80)
 	public void aGoatCartBreaksPlanksButNotObsidian(TestContext c) {
 		var tree = plant(c, new BlockPos(3, 2, 3));
@@ -209,6 +234,34 @@ public class HauntGameplayTest implements FabricGameTest {
 				"A goat head must possess the minecart");
 			c.assertTrue(world.getBlockState(obsidian).isOf(Blocks.OBSIDIAN), "Obsidian must survive a goat cart");
 			c.complete();
+		});
+	}
+
+	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt", tickLimit = 180)
+	public void aGoatCartBoardsACowItBumps(TestContext c) {
+		var tree = plant(c, new BlockPos(3, 2, 3));
+		var world = c.getWorld();
+		var at = c.getAbsolutePos(new BlockPos(5, 2, 3));
+		var cart = new MinecartEntity(world, at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
+		world.spawnEntity(cart);
+		var cow = EntityType.COW.create(world);
+		c.assertTrue(cow != null, "A cow must spawn for the cart to bump");
+		cow.refreshPositionAndAngles(cart.getX() + 0.35, cart.getY(), cart.getZ(), 0, 0);
+		cow.setAiDisabled(true);
+		world.spawnEntity(cow);
+		var player = c.createMockPlayer(GameMode.SURVIVAL);
+		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(HeadItems.item(HeadType.GOAT)));
+		tree.hang(player, HeadType.GOAT, player.getMainHandStack());
+		world.setTimeOfDay(HauntRules.MIDNIGHT);
+		tree.start(true);
+		c.waitAndRun(HauntRules.possessionReadyAt() + HauntRules.RISE_TICKS + 2, () -> {
+			cow.refreshPositionAndAngles(cart.getX(), cart.getY(), cart.getZ(), 0, 0);
+			cow.setVelocity(Vec3d.ZERO);
+			c.waitAndRun(12, () -> {
+				c.assertTrue(cow.getVehicle() == cart, "A goat cart boards a cow it bumps, then keeps running");
+				c.assertTrue(cart.hasPassengers(), "The cow stays in the cart");
+				c.complete();
+			});
 		});
 	}
 
@@ -303,6 +356,36 @@ public class HauntGameplayTest implements FabricGameTest {
 				if (world.getBlockState(pos).isOf(Blocks.STONE)) left++;
 			}
 			c.assertTrue(left == walls, "A wandering ghost must not break the walls it passes; left=" + left);
+			c.complete();
+		});
+	}
+
+	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt", tickLimit = 220)
+	public void aPossessedFurnaceOverflowsWithoutHarm(TestContext c) {
+		var tree = plant(c, new BlockPos(4, 2, 4));
+		var world = c.getWorld();
+		var furnace = c.getAbsolutePos(new BlockPos(6, 2, 4));
+		world.setBlockState(furnace, Blocks.FURNACE.getDefaultState()
+			.with(net.minecraft.block.AbstractFurnaceBlock.FACING, Direction.SOUTH)
+			.with(net.minecraft.block.AbstractFurnaceBlock.LIT, false));
+		var cow = EntityType.COW.create(world);
+		cow.setAiDisabled(true);
+		cow.setPosition(furnace.getX() + 3.5, furnace.getY(), furnace.getZ() + 0.5);
+		world.spawnEntity(cow);
+		float health = cow.getHealth();
+		var player = c.createMockPlayer(GameMode.SURVIVAL);
+		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(HeadItems.item(HeadType.BLAZE)));
+		tree.hang(player, HeadType.BLAZE, player.getMainHandStack());
+		world.setTimeOfDay(HauntRules.MIDNIGHT);
+		tree.start(true);
+		c.waitAndRun(HauntRules.possessionReadyAt() + HauntRules.RISE_TICKS + 40, () -> {
+			var state = world.getBlockState(furnace);
+			c.assertTrue(state.isOf(Blocks.FURNACE), "The furnace must stay a block");
+			c.assertTrue(state.get(net.minecraft.block.AbstractFurnaceBlock.LIT), "A possessed furnace stays lit");
+			c.assertTrue(state.get(net.minecraft.block.AbstractFurnaceBlock.FACING) == Direction.SOUTH,
+				"Overflow fire must not turn the furnace toward a target; facing=" + state.get(net.minecraft.block.AbstractFurnaceBlock.FACING));
+			c.assertTrue(cow.isAlive() && cow.getHealth() == health, "Fireplace overflow must not harm; health=" + cow.getHealth());
+			c.assertTrue(!cow.isOnFire(), "Fireplace overflow must not ignite");
 			c.complete();
 		});
 	}

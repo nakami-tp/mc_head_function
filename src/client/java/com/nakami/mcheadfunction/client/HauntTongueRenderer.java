@@ -1,14 +1,18 @@
 package com.nakami.mcheadfunction.client;
 
 import com.nakami.mcheadfunction.haunt.HauntTongueEntity;
+import net.minecraft.block.BlockRenderType;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.entity.EntityRenderer;
 import net.minecraft.client.render.entity.EntityRendererFactory;
+import net.minecraft.client.render.model.json.ModelTransformationMode;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
 
 public final class HauntTongueRenderer extends EntityRenderer<HauntTongueEntity> {
@@ -45,6 +49,18 @@ public final class HauntTongueRenderer extends EntityRenderer<HauntTongueEntity>
 				vert(buffer, matrices, pa.add(rb), light);
 			}
 		}
+		if (entity.carriedBlock().isAir()) return;
+		matrices.push();
+		matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees((float) Math.sin((entity.elapsed() + delta) * 0.6) * 12));
+		matrices.scale(0.7F, 0.7F, 0.7F);
+		if (entity.carriedBlock().getRenderType() == BlockRenderType.ENTITYBLOCK_ANIMATED) {
+			MinecraftClient.getInstance().getItemRenderer().renderItem(entity.carriedBlock().getBlock().asItem().getDefaultStack(),
+				ModelTransformationMode.NONE, light, OverlayTexture.DEFAULT_UV, matrices, vertices, entity.getWorld(), entity.getId());
+		} else {
+			matrices.translate(-0.5, -0.5, -0.5);
+			MinecraftClient.getInstance().getBlockRenderManager().renderBlockAsEntity(entity.carriedBlock(), matrices, vertices, light, OverlayTexture.DEFAULT_UV);
+		}
+		matrices.pop();
 	}
 
 	private static void vert(VertexConsumer buffer, MatrixStack matrices, Vec3d p, int light) {

@@ -105,6 +105,11 @@ public class McHeadFunctionClient implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(new SkillKeyTracker());
 		WorldRenderEvents.AFTER_ENTITIES.register(SonarWorldRender::afterEntities);
 		WorldRenderEvents.AFTER_ENTITIES.register(BlazeHeatRender::render);
+		ClientTickEvents.END_CLIENT_TICK.register(PigSwallowEffects::tick);
+		ClientTickEvents.END_CLIENT_TICK.register(HauntPumpkinEffects::tick);
+		WorldRenderEvents.AFTER_ENTITIES.register(HauntPumpkinEffects::afterEntities);
+		ClientTickEvents.END_CLIENT_TICK.register(HauntFurnaceEffects::tick);
+		WorldRenderEvents.AFTER_ENTITIES.register(HauntFurnaceEffects::afterEntities);
 	}
 
 	private static final class SkillKeyTracker implements ClientTickEvents.EndTick {

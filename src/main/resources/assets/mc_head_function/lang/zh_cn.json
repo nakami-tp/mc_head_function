@@ -36,7 +36,7 @@
   "head.mc_head_function.goat_head.wear": "%s：惯性冲锋 / 停止 · 锁定视角，左右移动键转向 · 命中击飞，落地眩晕 · 按硬度逐步撞碎方块",
   "head.mc_head_function.goat_head.throw": "左键投掷：撞击并顶飞目标",
   "head.mc_head_function.pig_head.wear": "进食获得更多饱和度",
-  "head.mc_head_function.pig_head.throw": "左键投掷：碰撞后回收 · 右键装备",
+  "head.mc_head_function.pig_head.throw": "左键一口吞下：饱食拉满、变成大肚子；10 秒后吐出，饱食回到吞之前 · 右键装备",
   "head.mc_head_function.cow_head.wear": "负面药水持续时间减半",
   "head.mc_head_function.cow_head.throw": "左键投掷：碰撞后回收 · 右键装备",
   "head.mc_head_function.sheep_head.wear": "降低幽匿感测范围",
