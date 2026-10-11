@@ -186,7 +186,7 @@ public final class HauntTongueEntity extends Entity {
 		} else if (target instanceof LivingEntity living) {
 			setPosition(contact);
 			Vec3d pull = mouth().subtract(contact);
-			if (!(living instanceof PlayerEntity) && pull.length() <= 1.35
+			if (!(living instanceof PlayerEntity) && !HauntVillagers.linger(living) && pull.length() <= 1.35
 				&& world.raycast(new RaycastContext(mouth(), contact, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, this)).getType() == HitResult.Type.MISS) {
 				swallowFrom = living.getPos();
 				preyNoClip = living.noClip;

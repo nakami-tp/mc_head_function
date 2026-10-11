@@ -175,12 +175,12 @@ final class HauntTownOutskirts {
 				p.put(x, 1, z, Blocks.IRON_BARS);
 			}
 		}
-		for (int x : new int[] {-46, -38}) for (int z : new int[] {-39, -34}) {
-			p.put(x, 0, z, Blocks.STONE_BRICK_WALL);
-			p.put(x, 1, z, Blocks.STONE_BRICK_SLAB);
-			p.put(x, -1, z + 1, Blocks.COARSE_DIRT);
-			p.put(x, 0, z + 1, Blocks.STONE_SLAB);
-			p.put(x, 0, z + 2, Blocks.POTTED_RED_TULIP);
+		for (var grave : HauntTownLandmarks.GRAVES) {
+			p.put(grave.x(), 0, grave.z(), Blocks.STONE_BRICK_WALL);
+			p.put(grave.x(), 1, grave.z(), Blocks.STONE_BRICK_SLAB);
+			p.put(grave.x(), -1, grave.z() + 1, Blocks.COARSE_DIRT);
+			p.put(grave.x(), 0, grave.z() + 1, Blocks.STONE_SLAB);
+			p.put(grave.x(), 0, grave.z() + 2, Blocks.POTTED_RED_TULIP);
 		}
 		for (int x : new int[] {-44, -40}) {
 			p.fill(x, 0, -28, x, 2, -28, Blocks.STONE_BRICKS);

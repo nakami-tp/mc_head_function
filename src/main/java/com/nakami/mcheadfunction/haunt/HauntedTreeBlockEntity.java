@@ -134,6 +134,7 @@ public final class HauntedTreeBlockEntity extends BlockEntity implements HauntTr
 		}
 		server.playSound(null, pos, SoundEvents.BLOCK_BELL_USE, SoundCategory.BLOCKS, 1.2F, 0.55F);
 		server.playSound(null, pos, SoundEvents.AMBIENT_CAVE.value(), SoundCategory.AMBIENT, 0.8F, 0.6F);
+		HauntGraveyardRising.tryStart(server, pos);
 		sync();
 	}
 
@@ -143,6 +144,7 @@ public final class HauntedTreeBlockEntity extends BlockEntity implements HauntTr
 		until = 0;
 		waves.clear();
 		for (GhostHeadEntity ghost : ghosts(server)) ghost.releaseAndReturn();
+		HauntGraveyardRising.tryStop(server, pos);
 		sync();
 	}
 
@@ -157,6 +159,7 @@ public final class HauntedTreeBlockEntity extends BlockEntity implements HauntTr
 		if (HauntRules.shouldEnd(tree.haunting, time, tree.until)) tree.stop();
 		else tree.tryStart(false);
 		if (!tree.haunting) return;
+		HauntGraveyardRising.tick(server, pos);
 		tree.waves.removeIf(wave -> {
 			if (wave.delay-- > 0) return false;
 			tree.takeOff(server, wave.kind, wave.head);

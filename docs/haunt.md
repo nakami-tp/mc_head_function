@@ -39,6 +39,8 @@
 
 离开这个时段就结束，包括睡觉跳过夜晚和改时间。结束时物件停下：幽灵头飞回挂点后消失；南瓜、地毯、灯笼在停下的位置变回方块，位置被占就掉成物品；箱子合上；被转过向的发射器和熔炉转回原朝向，熔炉熄灭；矿车和盔甲架停住。
 
+闹鬼进行中，附身范围内的村民会被叫醒，也不回家上床，这样物件还能碰到他们。走出范围或闹鬼结束后，恢复原版夜里回家。范围内村民**留命**：受伤只打到 1 点生命值，不会被物件或雷打死；青蛙箱子只拉不吞。僵尸或僵尸村民咬到本应低于 1 点时，把村民**转化**成僵尸村民。
+
 **附身范围**以树为中心，水平 48 格、上下 16 格。范围内某类物件不够，有几件附身几件；一类都找不到，那一类头留在树上发光。
 
 存档重进后，树记得自己是否在闹鬼、以及上次闹鬼是哪一晚。仍在时段内就继续；已经过了时段，按结束流程收尾。
@@ -103,8 +105,10 @@
 
 街区外扩约 24 格：南面为带招牌、南瓜灯与屋顶的镇门和进镇路，西面为池塘木桥，外围有秋林、低丘、果园、南瓜麦田、小墓园及牛羊圈、鸡舍。四向外路与广场连通。
 
-每次生成固定放置 6 名村民、3 头牛、4 只羊、5 只鸡和 2 只猫，保留正常 AI，不会自然消失；村民和动物仍会受到正常伤害。`town reset` 会连同外景重建，并恢复这一批居民；旧居民即使在未加载区块中保存，之后加载时也不会重复留下。生成与重建会覆盖整个 112×112 范围内的手动改动。
+每次生成固定放置 6 名村民、3 头牛、4 只羊、5 只鸡和 2 只猫，不会自然消失。闹鬼时范围内的村民不回家睡觉并留命；其余时间仍按原版作息。`town reset` 会连同外景重建，并恢复这一批居民；旧居民即使在未加载区块中保存，之后加载时也不会重复留下。生成与重建会覆盖整个 112×112 范围内的手动改动。
+
+镇中心那棵树开闹鬼时，墓园**起尸**：10 只从坟里爬出（5 只僵尸、5 只僵尸村民），约 2 秒露头。5 只进镇找村民，5 只在门口砂石路上按同一时钟跳 Thriller 四拍（后仰、甩头左、甩头右、张臂下砸）。没挂僵尸头也起。没有小镇的树不开这出。闹鬼结束收回这 10 只；转化出来的僵尸村民留下，重建时清掉。
 
 ## 核对依据
 
-已对照 [HauntRules](../src/main/java/com/nakami/mcheadfunction/rule/HauntRules.java)、[HauntedTreeBlock](../src/main/java/com/nakami/mcheadfunction/haunt/HauntedTreeBlock.java)、[HauntedTreeBlockEntity](../src/main/java/com/nakami/mcheadfunction/haunt/HauntedTreeBlockEntity.java)、[HauntBehaviors](../src/main/java/com/nakami/mcheadfunction/haunt/HauntBehaviors.java)、[HauntTongueEntity](../src/main/java/com/nakami/mcheadfunction/haunt/HauntTongueEntity.java)、[HauntTargets](../src/main/java/com/nakami/mcheadfunction/haunt/HauntTargets.java)、[HauntCommand](../src/main/java/com/nakami/mcheadfunction/haunt/HauntCommand.java)、[HauntTown](../src/main/java/com/nakami/mcheadfunction/haunt/HauntTown.java)，以及枯树、幽灵头、附身方块的客户端渲染。
+已对照 [HauntRules](../src/main/java/com/nakami/mcheadfunction/rule/HauntRules.java)、[HauntedTreeBlock](../src/main/java/com/nakami/mcheadfunction/haunt/HauntedTreeBlock.java)、[HauntedTreeBlockEntity](../src/main/java/com/nakami/mcheadfunction/haunt/HauntedTreeBlockEntity.java)、[HauntBehaviors](../src/main/java/com/nakami/mcheadfunction/haunt/HauntBehaviors.java)、[HauntStayOut](../src/main/java/com/nakami/mcheadfunction/haunt/HauntStayOut.java)、[HauntVillagers](../src/main/java/com/nakami/mcheadfunction/haunt/HauntVillagers.java)、[HauntGraveyardRising](../src/main/java/com/nakami/mcheadfunction/haunt/HauntGraveyardRising.java)、[HauntTownLandmarks](../src/main/java/com/nakami/mcheadfunction/haunt/HauntTownLandmarks.java)、[HauntTongueEntity](../src/main/java/com/nakami/mcheadfunction/haunt/HauntTongueEntity.java)、[HauntTargets](../src/main/java/com/nakami/mcheadfunction/haunt/HauntTargets.java)、[HauntCommand](../src/main/java/com/nakami/mcheadfunction/haunt/HauntCommand.java)、[HauntTown](../src/main/java/com/nakami/mcheadfunction/haunt/HauntTown.java)，以及枯树、幽灵头、附身方块的客户端渲染。

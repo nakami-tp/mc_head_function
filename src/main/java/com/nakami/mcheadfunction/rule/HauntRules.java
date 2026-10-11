@@ -174,6 +174,10 @@ public final class HauntRules {
 	public static boolean inHauntRange(double dx, double dy, double dz) {
 		return Math.abs(dx) <= RANGE && Math.abs(dz) <= RANGE && Math.abs(dy) <= RANGE_Y;
 	}
+	/** In range of an active haunting, villagers stay out instead of going home to bed. */
+	public static boolean villagersStayOut(boolean haunting, double dx, double dy, double dz) {
+		return haunting && inHauntRange(dx, dy, dz);
+	}
 	/** 1 at the first seen haunt tick, 0 after the chorus or when the client did not see the start. */
 	public static float chorus(int seenTicks) {
 		if (seenTicks < 0 || seenTicks >= CHORUS_TICKS) return 0;
@@ -353,5 +357,81 @@ public final class HauntRules {
 		List<T> shuffled = new ArrayList<>(candidates);
 		Collections.shuffle(shuffled, random);
 		return List.copyOf(shuffled.subList(0, Math.clamp(count, 0, shuffled.size())));
+	}
+
+	public static final int RISING = 10;
+	public static final int HUNTERS = 5;
+	public static final int DANCERS = 5;
+	public static final int CLIMB_TICKS = 40;
+	public static final float RISE_DEPTH = 1.8F;
+	public static final int RISE_STAGGER = 4;
+	public static final int DANCE_PERIOD = 80;
+	public static final int DANCE_BEAT = 20;
+
+	public static boolean risingHunter(int index) {
+		return index >= 0 && index < HUNTERS;
+	}
+	public static boolean risingDancer(int index) {
+		return index >= HUNTERS && index < RISING;
+	}
+	public static boolean risingZombieVillager(int index) {
+		return index >= 0 && index < RISING && index % 2 == 1;
+	}
+	public static int riseStagger(int index) {
+		return Math.max(0, index) * RISE_STAGGER;
+	}
+	public static float riseBuried(float remaining) {
+		float going = Math.min(CLIMB_TICKS, Math.max(0, remaining));
+		return (going / CLIMB_TICKS) * RISE_DEPTH;
+	}
+
+	/** Linger keeps a villager on the last half-heart. A bite at that last drop converts instead. */
+	public static float lingerAmount(boolean linger, float health, float amount) {
+		if (!linger) return amount;
+		return Math.min(amount, Math.max(0, health - 1));
+	}
+	public static boolean convertVillager(boolean linger, boolean zombieBite, float health) {
+		return linger && zombieBite && health <= 1;
+	}
+
+	public record DancePose(
+		float bodyPitch,
+		float headYaw,
+		float headPitch,
+		float leftArmRoll,
+		float rightArmRoll,
+		float leftArmPitch,
+		float rightArmPitch,
+		float leftLegRoll,
+		float rightLegRoll
+	) {
+		public static final DancePose LEAN = new DancePose(-0.45F, 0, 0.15F, 0.55F, -0.55F, 0.1F, 0.1F, -0.12F, 0.12F);
+		public static final DancePose SNAP_LEFT = new DancePose(-0.40F, -0.85F, 0.05F, 0.45F, -0.45F, 0.05F, 0.05F, -0.12F, 0.12F);
+		public static final DancePose SNAP_RIGHT = new DancePose(-0.40F, 0.85F, 0.05F, 0.45F, -0.45F, 0.05F, 0.05F, -0.12F, 0.12F);
+	}
+
+	public static DancePose thrillerPose(long worldTime) {
+		int t = Math.floorMod(worldTime, DANCE_PERIOD);
+		int beat = t / DANCE_BEAT;
+		float p = (t % DANCE_BEAT) / (float) DANCE_BEAT;
+		return switch (beat) {
+			case 0 -> DancePose.LEAN;
+			case 1 -> DancePose.SNAP_LEFT;
+			case 2 -> DancePose.SNAP_RIGHT;
+			default -> slam(p);
+		};
+	}
+
+	private static DancePose slam(float p) {
+		float raise = p < 0.35F ? p / 0.35F : Math.max(0, 1 - (p - 0.35F) / 0.65F);
+		float roll = 0.55F + 0.85F * raise;
+		float pitch = -0.2F * raise;
+		return new DancePose(-0.42F, 0, 0.1F, roll, -roll, pitch, pitch, -0.12F, 0.12F);
+	}
+
+	public static double danceSway(long worldTime) {
+		int t = Math.floorMod(worldTime, DANCE_PERIOD);
+		if (t < DANCE_BEAT * 3) return 0;
+		return Math.sin((t - DANCE_BEAT * 3) / (double) DANCE_BEAT * Math.PI) * 0.15;
 	}
 }
