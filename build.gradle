@@ -324,3 +324,57 @@ tasks.named('runHauntValidation').configure {
 		}
 	}
 }
+
+// Possessed frog chest feeding, in an isolated disposable client world.
+sourceSets {
+	chestValidation {
+		compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+		runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+	}
+}
+loom {
+	mods { chest_meal_validation { sourceSet sourceSets.chestValidation } }
+	runs {
+		chestValidation {
+			client()
+			source sourceSets.chestValidation
+			runDir 'build/chest-validation'
+		}
+	}
+}
+tasks.named('runChestValidation').configure {
+	doFirst { delete 'build/chest-validation/result.txt', 'build/chest-validation/screenshots' }
+	doLast {
+		def result = file('build/chest-validation/result.txt')
+		if (!result.exists() || !result.text.startsWith('PASS ')) {
+			throw new GradleException('Chest meal validation failed; see build/chest-validation/result.txt and logs.')
+		}
+	}
+}
+
+// Tree atmosphere thresholds and transitions, isolated from town and player saves.
+sourceSets {
+	treeValidation {
+		compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+		runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+	}
+}
+loom {
+	mods { haunt_tree_validation { sourceSet sourceSets.treeValidation } }
+	runs {
+		treeValidation {
+			client()
+			source sourceSets.treeValidation
+			runDir 'build/tree-validation'
+		}
+	}
+}
+tasks.named('runTreeValidation').configure {
+	doFirst { delete 'build/tree-validation/result.txt', 'build/tree-validation/screenshots' }
+	doLast {
+		def result = file('build/tree-validation/result.txt')
+		if (!result.exists() || !result.text.startsWith('PASS ')) {
+			throw new GradleException('Tree effects validation failed; see build/tree-validation/result.txt and logs.')
+		}
+	}
+}

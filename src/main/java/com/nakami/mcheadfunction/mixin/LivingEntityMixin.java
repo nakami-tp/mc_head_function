@@ -56,6 +56,11 @@ public abstract class LivingEntityMixin extends Entity implements com.nakami.mch
 		}
 	}
 
+	@Inject(method = "dropXp", at = @At("HEAD"), cancellable = true)
+	private void mhf$noMealExperience(Entity attacker, CallbackInfo ci) {
+		if (com.nakami.mcheadfunction.haunt.HauntMeal.capturing(this)) ci.cancel();
+	}
+
 	@Inject(method = "jump", at = @At("HEAD"), cancellable = true)
 	private void mhf$stunJump(CallbackInfo ci) {
 		if (com.nakami.mcheadfunction.wear.GoatCharge.isStunned((LivingEntity) (Object) this)) ci.cancel();

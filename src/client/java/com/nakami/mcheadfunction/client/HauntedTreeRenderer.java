@@ -14,7 +14,6 @@ import net.minecraft.client.render.block.entity.BlockEntityRendererFactory;
 import net.minecraft.client.render.model.json.ModelTransformationMode;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.ItemStack;
-import net.minecraft.particle.ParticleTypes;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
@@ -22,6 +21,8 @@ import net.minecraft.util.math.Vec3d;
 public final class HauntedTreeRenderer implements BlockEntityRenderer<HauntedTreeBlockEntity> {
 	private static final Identifier BARK = Identifier.ofVanilla("textures/block/dark_oak_log.png");
 	private static final Identifier CHAIN = Identifier.ofVanilla("textures/block/chain.png");
+
+	private final HauntedTreeAtmosphere atmosphere = new HauntedTreeAtmosphere();
 
 	public HauntedTreeRenderer(BlockEntityRendererFactory.Context context) { }
 
@@ -35,18 +36,18 @@ public final class HauntedTreeRenderer implements BlockEntityRenderer<HauntedTre
 	public void render(HauntedTreeBlockEntity tree, float delta, MatrixStack matrices, VertexConsumerProvider vertices, int light, int overlay) {
 		var world = tree.getWorld();
 		long time = world == null ? 0 : world.getTime();
+		double frameTime = (double) time + delta;
 		var bark = vertices.getBuffer(RenderLayer.getEntitySolid(BARK));
 		for (var bone : HauntTreeShape.bones()) tube(matrices, bark, bone.from(), bone.to(), bone.radius(), light, 0.35F, 0.22F, 0.14F);
 		int hung = tree.hungCount();
-		int tier = HauntRules.tier(hung);
-		boolean night = world != null && HauntRules.isHauntTime(world.getTimeOfDay());
-		boolean glow = tree.haunting() || (tier >= 3 && night);
+		var atmosphereState = atmosphere.update(tree, time);
+		boolean glow = HauntRules.headsGlow(hung, tree.haunting());
 		int headLight = glow ? 0xF000F0 : light;
 		for (int i = 0; i < HauntRules.SLOTS; i++) {
 			var type = tree.slot(i);
 			if (type == null) continue;
 			Vec3d hang = HauntTreeShape.hangOffset(i);
-			double swing = Math.sin((time + delta + i * 11) * 0.05) * 0.12;
+			double swing = atmosphereState.swing(frameTime, i);
 			Vec3d branch = hang.add(0, 0.55, 0);
 			tube(matrices, vertices.getBuffer(RenderLayer.getEntityCutout(CHAIN)), branch, hang.add(swing, 0, 0), 0.02F, light, 0.45F, 0.45F, 0.5F);
 			matrices.push();
@@ -56,14 +57,9 @@ public final class HauntedTreeRenderer implements BlockEntityRenderer<HauntedTre
 			MinecraftClient.getInstance().getItemRenderer().renderItem(new ItemStack(HeadItems.item(type)),
 				ModelTransformationMode.FIXED, headLight, OverlayTexture.DEFAULT_UV, matrices, vertices, world, i);
 			matrices.pop();
+			HauntedTreeAtmosphere.headHalo(atmosphereState, frameTime, i, hang.add(swing, -0.15, 0), matrices, vertices);
 		}
-		if (world != null && world.isClient() && tier > 0 && world.random.nextFloat() < 0.12F * tier) {
-			var pos = tree.getPos();
-			world.addParticle(tier >= 2 ? ParticleTypes.SOUL : ParticleTypes.SMOKE,
-				pos.getX() + 0.5 + (world.random.nextDouble() - 0.5) * 3,
-				pos.getY() + 2 + world.random.nextDouble() * 6,
-				pos.getZ() + 0.5 + (world.random.nextDouble() - 0.5) * 3, 0, 0.01, 0);
-		}
+		HauntedTreeAtmosphere.render(atmosphereState, delta, matrices, vertices);
 	}
 
 	private static void tube(MatrixStack matrices, VertexConsumer buffer, Vec3d from, Vec3d to, float radius, int light, float r, float g, float b) {

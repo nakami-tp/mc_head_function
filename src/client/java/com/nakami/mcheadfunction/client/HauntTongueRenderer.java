@@ -16,11 +16,14 @@ public final class HauntTongueRenderer extends EntityRenderer<HauntTongueEntity>
 
 	public HauntTongueRenderer(EntityRendererFactory.Context context) { super(context); }
 
+	@Override public boolean shouldRender(HauntTongueEntity e, net.minecraft.client.render.Frustum f, double x, double y, double z) { return true; }
+
 	@Override
 	public Identifier getTexture(HauntTongueEntity entity) { return SKIN; }
 
 	@Override
 	public void render(HauntTongueEntity entity, float yaw, float delta, MatrixStack matrices, VertexConsumerProvider vertices, int light) {
+		ChestTeethRenderer.render(entity, delta, matrices, vertices, light);
 		Vec3d tip = entity.getLerpedPos(delta);
 		Vec3d start = entity.mouth().subtract(tip);
 		Vec3d direction = start.negate().normalize();

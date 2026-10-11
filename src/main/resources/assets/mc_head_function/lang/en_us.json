@@ -161,6 +161,8 @@
   "haunt.mc_head_function.bad_kind": "Unknown object kind",
   "haunt.mc_head_function.started": "Midnight. The heads leave the tree.",
   "haunt.mc_head_function.stopped": "The haunting has ended",
+  "haunt.mc_head_function.off": "Haunting is closed in this world",
+  "haunt.mc_head_function.on": "Haunting may start again",
   "haunt.mc_head_function.count_set": "%s possession count set to %s",
   "haunt.mc_head_function.town_built": "Haunted town built",
   "haunt.mc_head_function.town_reset": "Haunted town rebuilt",

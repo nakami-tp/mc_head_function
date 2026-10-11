@@ -2,6 +2,7 @@ package com.nakami.mcheadfunction;
 
 import com.nakami.mcheadfunction.haunt.GhostHeadEntity;
 import com.nakami.mcheadfunction.haunt.HauntBlocks;
+import com.nakami.mcheadfunction.haunt.HauntTongueEntity;
 import com.nakami.mcheadfunction.haunt.HauntTown;
 import com.nakami.mcheadfunction.haunt.HauntedTreeBlockEntity;
 import com.nakami.mcheadfunction.haunt.PossessedPropEntity;
@@ -33,6 +34,7 @@ public class HauntGameplayTest implements FabricGameTest {
 		for (int i = 0; i < 6; i++) world.setBlockState(pos.up(i), Blocks.AIR.getDefaultState());
 		world.setBlockState(pos, HauntBlocks.TREE.getDefaultState());
 		HauntBlocks.TREE.onPlaced(world, pos, world.getBlockState(pos), null, ItemStack.EMPTY);
+		com.nakami.mcheadfunction.haunt.HauntWorldData.get(world).setOff(false);
 		return (HauntedTreeBlockEntity) world.getBlockEntity(pos);
 	}
 
@@ -94,19 +96,63 @@ public class HauntGameplayTest implements FabricGameTest {
 		c.complete();
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt", tickLimit = 80)
+	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt_midnight", tickLimit = 80)
+	public void eightKindsStartAtMidnight(TestContext c) {
+		var tree = plant(c, new BlockPos(4, 1, 4));
+		c.getWorld().setTimeOfDay(6000);
+		var player = c.createMockPlayer(GameMode.SURVIVAL);
+		var types = HeadType.values();
+		for (int i = 0; i < HauntRules.READY; i++) {
+			player.setStackInHand(Hand.MAIN_HAND, new ItemStack(HeadItems.item(types[i])));
+			tree.hang(player, types[i], player.getMainHandStack());
+		}
+		c.assertTrue(tree.hungCount() == HauntRules.READY && !tree.haunting(), "Eight kinds must wait for midnight");
+		c.getWorld().setTimeOfDay(HauntRules.MIDNIGHT);
+		c.waitAndRun(5, () -> {
+			c.assertTrue(tree.haunting(), "Eight kinds must start at midnight");
+			c.complete();
+		});
+	}
+
+	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt_day_fill", tickLimit = 20)
+	public void fillingNineteenStartsDuringTheDay(TestContext c) {
+		var tree = plant(c, new BlockPos(4, 1, 4));
+		c.getWorld().setTimeOfDay(6000);
+		tree.fill(null);
+		c.assertTrue(tree.haunting(), "Hanging every kind must start at once, even at noon");
+		c.complete();
+	}
+
+	// This test changes the whole world's switch; other haunt tests reset it in plant().
+	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt_off", tickLimit = 40)
+	public void offStopsAndBlocksNaturalHaunting(TestContext c) {
+		var tree = plant(c, new BlockPos(4, 1, 4));
+		tree.fill(null);
+		c.assertTrue(tree.haunting(), "A full tree starts before it is closed");
+		com.nakami.mcheadfunction.haunt.HauntWorldData.get(c.getWorld()).setOff(true);
+		tree.stop();
+		c.getWorld().setTimeOfDay(24000 + HauntRules.MIDNIGHT);
+		c.waitAndRun(5, () -> {
+			c.assertTrue(!tree.haunting(), "A closed world must not haunt at midnight");
+			c.complete();
+		});
+	}
+
+	// World-time transitions must not race the possession scenes in the haunt batch.
+	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt_lifecycle", tickLimit = 80)
 	public void aFullTreeStartsAtMidnightAndStopsAtDawn(TestContext c) {
 		var tree = plant(c, new BlockPos(5, 2, 5));
 		var pumpkin = c.getAbsolutePos(new BlockPos(7, 2, 5));
 		c.getWorld().setBlockState(pumpkin, Blocks.CARVED_PUMPKIN.getDefaultState());
-		tree.fill(null);
 		c.getWorld().setTimeOfDay(HauntRules.MIDNIGHT);
+		tree.fill(null);
 		c.waitAndRun(5, () -> {
 			c.assertTrue(tree.haunting(), "A full tree must start haunting at midnight");
 			c.assertTrue(!c.getWorld().getEntitiesByClass(GhostHeadEntity.class, new Box(tree.getPos()).expand(20), e -> true).isEmpty(),
 				"Ghost heads must leave the tree");
 			c.getWorld().setTimeOfDay(HauntRules.DAWN);
-			c.waitAndRun(5, () -> {
+			// waitAndRun uses absolute test ticks, including inside another callback.
+			c.waitAndRun(10, () -> {
 				c.assertTrue(!tree.haunting(), "Dawn must end the haunting");
 				c.complete();
 			});
@@ -166,7 +212,7 @@ public class HauntGameplayTest implements FabricGameTest {
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt", tickLimit = 40)
+	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt", tickLimit = 100)
 	public void anArmorStandSurvivesItsOwnLeaps(TestContext c) {
 		var tree = plant(c, new BlockPos(4, 2, 4));
 		var world = c.getWorld();
@@ -174,6 +220,7 @@ public class HauntGameplayTest implements FabricGameTest {
 		var at = c.getAbsolutePos(new BlockPos(6, 2, 4));
 		stand.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
 		world.spawnEntity(stand);
+		double startY = stand.getY();
 		var player = c.createMockPlayer(GameMode.SURVIVAL);
 		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(HeadItems.item(HeadType.RABBIT)));
 		tree.hang(player, HeadType.RABBIT, player.getMainHandStack());
@@ -183,28 +230,81 @@ public class HauntGameplayTest implements FabricGameTest {
 			c.assertTrue(stand.isAlive(), "Rabbit armor stand must stay after being possessed");
 			c.assertTrue(!world.getEntitiesByClass(GhostHeadEntity.class, stand.getBoundingBox().expand(8), e -> true).isEmpty(),
 				"A rabbit head must possess the armor stand");
+			c.waitAndRun(80, () -> {
+				c.assertTrue(stand.isAlive() && stand.getY() < startY + 3,
+					"A possessed armor stand must keep a short hop, not climb; y=" + stand.getY() + " start=" + startY);
+				c.complete();
+			});
+		});
+	}
+
+
+
+
+	@GameTest(templateName = "mc_head_function:chest_meal_arena", batchId = "haunt", tickLimit = 30)
+	public void aFrogChestDoesNotPullCreativePlayers(TestContext c) {
+		var world = c.getWorld();
+		var chest = c.getAbsolutePos(new BlockPos(2, 1, 2));
+		world.setBlockState(chest, Blocks.CHEST.getDefaultState());
+		var inventory = (net.minecraft.inventory.Inventory) world.getBlockEntity(chest);
+		var creative = c.createMockPlayer(GameMode.CREATIVE);
+		var survival = c.createMockPlayer(GameMode.SURVIVAL);
+		creative.refreshPositionAndAngles(chest.getX() + 0.5, chest.getY(), chest.getZ() + 6, 180, 0);
+		survival.refreshPositionAndAngles(chest.getX() + 4.5, chest.getY(), chest.getZ() + 6, 180, 0);
+		creative.setNoGravity(true);
+		survival.setNoGravity(true);
+		creative.setVelocity(Vec3d.ZERO);
+		survival.setVelocity(Vec3d.ZERO);
+		var start = creative.getPos();
+		world.spawnEntity(new HauntTongueEntity(world, chest, inventory, creative));
+		var survivalTongue = new HauntTongueEntity(world, chest, inventory, survival);
+		world.spawnEntity(survivalTongue);
+		c.waitAndRun(16, () -> {
+			c.assertTrue(creative.getVelocity().lengthSquared() < 0.01 && creative.getPos().squaredDistanceTo(start) < 0.25,
+				"A possessed chest must not pull a creative player; vel=" + creative.getVelocity() + " pos=" + creative.getPos());
+			c.assertTrue(survival.getVelocity().lengthSquared() > 0.04,
+				"A possessed chest must still pull a survival player; vel=" + survival.getVelocity() + " tongueClock=" + survivalTongue.elapsed() + " removed=" + survivalTongue.isRemoved() + " targetAlive=" + survival.isAlive() + " canPull=" + HauntTongueEntity.canPull(survival) + " chest=" + world.getBlockState(chest) + " tonguePos=" + survivalTongue.getPos());
 			c.complete();
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt_town", tickLimit = 10)
-	public void townBuildPlacesEveryHostKind(TestContext c) {
-		var origin = c.getAbsolutePos(new BlockPos(16, 3, 16));
-		HauntTown.build(c.getWorld(), origin);
-		c.assertTrue(c.getWorld().getBlockEntity(origin) instanceof HauntedTreeBlockEntity, "Town must plant a haunted tree");
-		var counts = new java.util.EnumMap<HauntRules.HostKind, Integer>(HauntRules.HostKind.class);
-		for (var pos : BlockPos.iterate(origin.add(-32, 0, -32), origin.add(31, 16, 31))) {
-			var state = c.getWorld().getBlockState(pos);
-			for (var kind : HauntRules.HostKind.values()) {
-				if (com.nakami.mcheadfunction.haunt.HauntTargets.matches(kind, state)) counts.merge(kind, 1, Integer::sum);
-			}
+	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt", tickLimit = 20)
+	public void unpairedHeadsWanderThroughWalls(TestContext c) {
+		var tree = plant(c, new BlockPos(4, 2, 4));
+		var world = c.getWorld();
+		var player = c.createMockPlayer(GameMode.SURVIVAL);
+		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(HeadItems.item(HeadType.PIG)));
+		tree.hang(player, HeadType.PIG, player.getMainHandStack());
+		world.setTimeOfDay(HauntRules.MIDNIGHT);
+		tree.start(true);
+		var ghosts = world.getEntitiesByClass(GhostHeadEntity.class, new Box(tree.getPos()).expand(8),
+			ghost -> ghost.head() == HeadType.PIG);
+		c.assertTrue(ghosts.size() == 1, "A pig head must send out one wandering ghost; ghosts=" + ghosts.size());
+		c.assertTrue(tree.has(HeadType.PIG), "The real pig head stays on the tree");
+		var ghost = ghosts.get(0);
+		c.assertTrue(ghost.wandering() && ghost.noClip, "An unpaired ghost must wander and pass through walls");
+		var start = ghost.getPos();
+		int stone = 0;
+		for (int x = -2; x <= 2; x++) for (int y = 0; y <= 6; y++) for (int z = -2; z <= 2; z++) {
+			var pos = tree.getPos().add(x, y, z);
+			if (world.getBlockState(pos).isOf(HauntBlocks.TREE) || world.getBlockEntity(pos) != null) continue;
+			world.setBlockState(pos, Blocks.STONE.getDefaultState());
+			stone++;
 		}
-		var range = com.nakami.mcheadfunction.haunt.HauntTargets.range(origin);
-		counts.put(HauntRules.HostKind.MINECART, c.getWorld().getEntitiesByClass(MinecartEntity.class, range, e -> true).size());
-		counts.put(HauntRules.HostKind.ARMOR_STAND, c.getWorld().getEntitiesByClass(ArmorStandEntity.class, range, e -> true).size());
-		for (var kind : HauntRules.HostKind.values()) c.assertTrue(counts.getOrDefault(kind, 0) > kind.defaultCount,
-			"Town must have spare hosts for " + kind + ": " + counts.getOrDefault(kind, 0));
-		c.complete();
+		c.assertTrue(stone > 0, "Stone walls must box the hanging ghost");
+		int walls = stone;
+		c.waitAndRun(12, () -> {
+			c.assertTrue(ghost.isAlive() && !ghost.isRemoved(), "A wandering ghost must survive walls");
+			c.assertTrue(ghost.getPos().squaredDistanceTo(start) > 0.25,
+				"A wandering ghost must keep drifting through blocks; start=" + start + " now=" + ghost.getPos());
+			int left = 0;
+			for (int x = -2; x <= 2; x++) for (int y = 0; y <= 6; y++) for (int z = -2; z <= 2; z++) {
+				var pos = tree.getPos().add(x, y, z);
+				if (world.getBlockState(pos).isOf(Blocks.STONE)) left++;
+			}
+			c.assertTrue(left == walls, "A wandering ghost must not break the walls it passes; left=" + left);
+			c.complete();
+		});
 	}
 
 	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt")

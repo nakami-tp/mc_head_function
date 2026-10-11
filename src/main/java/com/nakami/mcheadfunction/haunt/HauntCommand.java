@@ -21,6 +21,8 @@ public final class HauntCommand {
 			literal("haunt").requires(source -> source.hasPermissionLevel(2))
 				.then(literal("start").executes(HauntCommand::start))
 				.then(literal("stop").executes(HauntCommand::stop))
+				.then(literal("off").executes(HauntCommand::off))
+				.then(literal("on").executes(HauntCommand::on))
 				.then(literal("count").then(argument("kind", StringArgumentType.word())
 					.then(argument("count", IntegerArgumentType.integer(0, HauntRules.MAX_COUNT))
 						.executes(HauntCommand::count))))
@@ -55,6 +57,22 @@ public final class HauntCommand {
 		}
 		tree.stop();
 		c.getSource().sendFeedback(() -> Text.translatable("haunt.mc_head_function.stopped"), true);
+		return 1;
+	}
+
+	private static int off(CommandContext<ServerCommandSource> c) {
+		var world = c.getSource().getWorld();
+		HauntWorldData.get(world).setOff(true);
+		for (var pos : HauntIndex.trees(world)) {
+			if (world.getBlockEntity(pos) instanceof HauntedTreeBlockEntity tree) tree.stop();
+		}
+		c.getSource().sendFeedback(() -> Text.translatable("haunt.mc_head_function.off"), true);
+		return 1;
+	}
+
+	private static int on(CommandContext<ServerCommandSource> c) {
+		HauntWorldData.get(c.getSource().getWorld()).setOff(false);
+		c.getSource().sendFeedback(() -> Text.translatable("haunt.mc_head_function.on"), true);
 		return 1;
 	}
 

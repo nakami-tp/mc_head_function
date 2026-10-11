@@ -161,6 +161,8 @@
   "haunt.mc_head_function.bad_kind": "不认识这种物件",
   "haunt.mc_head_function.started": "半夜到了，树上的头飞了出去",
   "haunt.mc_head_function.stopped": "闹鬼结束了",
+  "haunt.mc_head_function.off": "这个世界已经关闭闹鬼",
+  "haunt.mc_head_function.on": "这个世界重新允许闹鬼",
   "haunt.mc_head_function.count_set": "%s 附身件数设为 %s",
   "haunt.mc_head_function.town_built": "闹鬼小镇已经铺好",
   "haunt.mc_head_function.town_reset": "闹鬼小镇已经重建",

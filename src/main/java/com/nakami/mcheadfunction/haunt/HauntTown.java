@@ -19,11 +19,19 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 
-/** Rebuildable 64 × 64 filming set: a lived-in harvest village around the haunted tree. */
+/** Rebuildable village and countryside filming set: a lived-in harvest village around the haunted tree. */
 public final class HauntTown {
 	private HauntTown() { }
 
 	public static void build(ServerWorld world, BlockPos center) {
+		// Pumpkin placement searches for golem patterns up to four blocks beyond the town.
+		// Load that border before placing anything; vanilla's pattern air check assumes loaded chunks.
+		int radius = HauntWorldData.TOWN / 2 + 4;
+		for (int x = (center.getX() - radius) >> 4; x <= (center.getX() + radius - 1) >> 4; x++) {
+			for (int z = (center.getZ() - radius) >> 4; z <= (center.getZ() + radius - 1) >> 4; z++) {
+				world.getChunk(x, z);
+			}
+		}
 		clear(world, center);
 		new Village(world, center).build();
 		HauntWorldData.get(world).setTown(center.toImmutable());
@@ -38,14 +46,15 @@ public final class HauntTown {
 		// Stop before replacing blocks so possessed props cannot restore themselves over the new set.
 		if (world.getBlockEntity(center) instanceof HauntedTreeBlockEntity tree) tree.stop();
 		int r = HauntWorldData.TOWN / 2;
-		var box = new Box(center.getX() - r, center.getY() - 2, center.getZ() - r, center.getX() + r, center.getY() + 17, center.getZ() + r);
-		BlockPos.stream(center.add(-r, -2, -r), center.add(r - 1, 16, r - 1))
+		var box = new Box(center.getX() - r, center.getY() - 4, center.getZ() - r, center.getX() + r, center.getY() + 17, center.getZ() + r);
+		BlockPos.stream(center.add(-r, -4, -r), center.add(r - 1, 16, r - 1))
 			.forEach(pos -> world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS));
 		for (var entity : world.getOtherEntities(null, box, e -> !(e instanceof net.minecraft.entity.player.PlayerEntity))) entity.discard();
+		HauntTownResidents.clear(world, center);
 	}
 
 	/** Local coordinates: facade at z=0 facing north, interior towards +z. Rotate the whole state and position together. */
-	private record Plot(ServerWorld world, BlockPos origin, BlockRotation rotation) {
+	record Plot(ServerWorld world, BlockPos origin, BlockRotation rotation) {
 		BlockPos at(int x, int y, int z) { return origin.add(new BlockPos(x, y, z).rotate(rotation)); }
 		void put(int x, int y, int z, Block block) { put(x, y, z, block.getDefaultState()); }
 		void put(int x, int y, int z, BlockState state) { world.setBlockState(at(x, y, z), state.rotate(rotation), Block.NOTIFY_LISTENERS | Block.FORCE_STATE); }
@@ -90,18 +99,20 @@ public final class HauntTown {
 			garden(-27, 3);
 			freightYard();
 			boundary();
+			new HauntTownOutskirts(town).build();
 			for (int[] p : new int[][] {{-28,-27},{10,-27},{28,-11},{-28,27},{16,28},{28,27},{-28,-8}}) autumnTree(p[0], p[1]);
 			world.setBlockState(center, HauntBlocks.TREE.getDefaultState(), Block.NOTIFY_LISTENERS);
 			HauntBlocks.TREE.onPlaced(world, center, world.getBlockState(center), null, ItemStack.EMPTY);
 			// Bulk placement avoids physics destroying half-built doors, beds and hanging lanterns.
 			// Resolve pane/fence/wall/stair connections after every neighbor exists.
-			for (var pos : BlockPos.iterate(center.add(-32, 0, -32), center.add(31, 15, 31))) {
+			for (var pos : BlockPos.iterate(center.add(-HauntWorldData.TOWN / 2, 0, -HauntWorldData.TOWN / 2), center.add(HauntWorldData.TOWN / 2 - 1, 15, HauntWorldData.TOWN / 2 - 1))) {
 				var state = world.getBlockState(pos);
 				if (state.getBlock() instanceof LeavesBlock) world.scheduleBlockTick(pos, state.getBlock(), 1);
 				if (state.getBlock() instanceof PaneBlock || state.getBlock() instanceof FenceBlock
 					|| state.getBlock() instanceof WallBlock || state.getBlock() instanceof StairsBlock)
 					world.setBlockState(pos, Block.postProcessState(state, world, pos), Block.NOTIFY_LISTENERS);
 			}
+			HauntTownResidents.spawn(world, center);
 		}
 
 		private void ground() {
@@ -249,6 +260,7 @@ public final class HauntTown {
 					p.put(3, 1, d - 4, Blocks.CAKE);
 					p.put(2, 1, d - 4, Blocks.FLOWER_POT);
 					p.put(1, 0, d - 3, Blocks.FURNACE);
+					bed(p, w - 3, 0, 4);
 				}
 				case HERBALIST -> {
 					p.fill(1, 0, d - 4, 1, 2, d - 2, Blocks.BOOKSHELF);
@@ -259,6 +271,7 @@ public final class HauntTown {
 				case COTTAGE -> { bed(p, w - 3, 0, 4); p.put(1, 0, d - 3, Blocks.BOOKSHELF); }
 				case TAILOR -> {
 					p.put(1, 0, d - 3, Blocks.LOOM);
+					bed(p, 3, 0, 5);
 					p.fill(1, 0, 5, 1, 0, 7, Blocks.PURPLE_WOOL);
 					stand(p, w - 3, 0, 4); stand(p, w - 3, 0, 6);
 				}

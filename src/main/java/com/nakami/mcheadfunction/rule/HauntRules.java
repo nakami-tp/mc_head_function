@@ -15,6 +15,10 @@ public final class HauntRules {
 	public static final long DAWN = 23000;
 	/** One hang point per head kind, so a full tree holds every kind. */
 	public static final int SLOTS = HeadType.values().length;
+	/** Kinds needed before midnight can start a haunting on its own. */
+	public static final int READY = 8;
+	/** Heads that glow at any hour, not only at night. */
+	public static final int GLOW = 10;
 	/** Last-haunted night of a tree that has never haunted. */
 	public static final long NEVER = Long.MIN_VALUE;
 	private HauntRules() { }
@@ -26,19 +30,29 @@ public final class HauntRules {
 	public static long night(long timeOfDay) {
 		return Math.floorDiv(timeOfDay, DAY);
 	}
-	public static boolean shouldStart(boolean full, boolean haunting, long timeOfDay, long lastNight) {
-		return full && !haunting && isHauntTime(timeOfDay) && night(timeOfDay) != lastNight;
+	public static boolean shouldStart(int hung, boolean haunting, boolean disabled, long timeOfDay, long lastNight) {
+		return !disabled && !haunting && hung >= READY && isHauntTime(timeOfDay) && night(timeOfDay) != lastNight;
 	}
-	public static boolean shouldEnd(boolean haunting, long timeOfDay) {
-		return haunting && !isHauntTime(timeOfDay);
+	/** Hanging the last kind starts at once, even during the day. */
+	public static boolean shouldStartWhenFilled(int hung, boolean haunting, boolean disabled) {
+		return !disabled && !haunting && hung >= SLOTS;
+	}
+	public static long hauntUntil(long timeOfDay) {
+		long time = Math.floorMod(timeOfDay, DAY);
+		return time < DAWN ? timeOfDay - time + DAWN : timeOfDay - time + DAY + DAWN;
+	}
+	public static boolean shouldEnd(boolean haunting, long timeOfDay, long until) {
+		return haunting && timeOfDay >= until;
 	}
 
 	public static int tier(int hung) {
-		if (hung >= SLOTS) return 4;
-		if (hung >= 15) return 3;
-		if (hung >= 10) return 2;
-		if (hung >= 5) return 1;
+		if (hung >= GLOW) return 3;
+		if (hung >= 6) return 2;
+		if (hung >= 4) return 1;
 		return 0;
+	}
+	public static boolean headsGlow(int hung, boolean haunting) {
+		return haunting || hung >= GLOW;
 	}
 	public static boolean isFull(Set<HeadType> hung) {
 		return hung.containsAll(EnumSet.allOf(HeadType.class));
@@ -84,13 +98,38 @@ public final class HauntRules {
 
 	public static final int MAX_COUNT = 64;
 
-	/** The kind of object this head possesses, or null when it only glows on the tree. */
+	/** Horizontal distance from the tree while an unpaired ghost wanders. */
+	public static final double WANDER_MIN_RADIUS = 6;
+	public static final double WANDER_MAX_RADIUS = 28;
+	/** Height above the tree core while an unpaired ghost wanders. */
+	public static final double WANDER_MIN_Y = 2;
+	public static final double WANDER_MAX_Y = 10;
+
+	public record Offset(double x, double y, double z) {}
+
+	/** The kind of object this head possesses, or null when it wanders instead. */
 	public static HostKind host(HeadType type) {
 		for (HostKind kind : HostKind.values()) if (kind.head == type) return kind;
 		return null;
 	}
+	/** Unpaired hung heads split a ghost that drifts through walls. */
+	public static boolean wanders(HeadType type) {
+		return host(type) == null;
+	}
+	/** A point inside the haunt range, away from the trunk, for a wandering ghost. */
+	public static Offset wanderOffset(Random random) {
+		double angle = random.nextDouble() * Math.PI * 2;
+		double radius = WANDER_MIN_RADIUS + random.nextDouble() * (WANDER_MAX_RADIUS - WANDER_MIN_RADIUS);
+		double y = WANDER_MIN_Y + random.nextDouble() * (WANDER_MAX_Y - WANDER_MIN_Y);
+		return new Offset(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
+	}
 	public static int clampCount(int count) {
 		return Math.clamp(count, 0, MAX_COUNT);
+	}
+
+	/** A frog chest eats blocking blocks on the way to prey, not hosts, trees, inventories or bedrock. */
+	public static boolean canFrogChestEat(boolean unbreakable, boolean hostOrTree, boolean hasBlockEntity) {
+		return !unbreakable && !hostOrTree && !hasBlockEntity;
 	}
 	public static <T> List<T> pick(List<T> candidates, int count, Random random) {
 		List<T> shuffled = new ArrayList<>(candidates);

@@ -4,11 +4,9 @@ import com.nakami.mcheadfunction.McHeadFunction;
 import com.nakami.mcheadfunction.entity.ModEntities;
 import com.nakami.mcheadfunction.head.HeadEffects;
 import com.nakami.mcheadfunction.head.HeadSounds;
-import com.nakami.mcheadfunction.net.SonarS2CPayload;
 import com.nakami.mcheadfunction.rule.HeadDepthRules;
 import com.nakami.mcheadfunction.rule.HeadRules;
 import com.nakami.mcheadfunction.rule.HauntRules.HostKind;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.block.AbstractFurnaceBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -16,7 +14,6 @@ import net.minecraft.block.Blocks;
 import net.minecraft.block.ChestBlock;
 import net.minecraft.block.DispenserBlock;
 import net.minecraft.block.entity.ChestBlockEntity;
-import net.minecraft.inventory.Inventory;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.ItemEntity;
@@ -27,7 +24,6 @@ import net.minecraft.entity.vehicle.AbstractMinecartEntity;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
-import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.BlockPos;
@@ -45,6 +41,7 @@ public final class HauntBehaviors {
 	}
 
 	public static void tick(ServerWorld world, GhostHeadEntity ghost) {
+		if (ghost.kind() == null) return;
 		switch (ghost.kind()) {
 			case CHEST -> chest(world, ghost);
 			case PUMPKIN -> pumpkin(world, ghost);
@@ -73,7 +70,10 @@ public final class HauntBehaviors {
 			host.velocityModified = true;
 		} else if (ghost.hostBlock() != null) {
 			BlockState state = world.getBlockState(ghost.hostBlock());
-			if (state.getBlock() instanceof ChestBlock) world.addSyncedBlockEvent(ghost.hostBlock(), state.getBlock(), 1, 0);
+			if (state.getBlock() instanceof ChestBlock) {
+				for (var tongue : world.getEntitiesByClass(HauntTongueEntity.class, new Box(ghost.hostBlock()).expand(24), t -> t.belongsTo(ghost))) tongue.finish();
+				world.addSyncedBlockEvent(ghost.hostBlock(), state.getBlock(), 1, 0);
+			}
 			if (state.getBlock() instanceof AbstractFurnaceBlock) {
 				world.setBlockState(ghost.hostBlock(), state.with(AbstractFurnaceBlock.LIT, false));
 			}
@@ -94,14 +94,19 @@ public final class HauntBehaviors {
 
 	private static void chest(ServerWorld world, GhostHeadEntity ghost) {
 		BlockPos pos = ghost.hostBlock();
-		if (pos == null || !(world.getBlockEntity(pos) instanceof ChestBlockEntity chest)) return;
-		world.addSyncedBlockEvent(pos, world.getBlockState(pos).getBlock(), 1, 1);
+		if (pos == null || !(world.getBlockEntity(pos) instanceof ChestBlockEntity)) return;
 		if (ghost.age % 40 != 1) return;
 		if (!world.getEntitiesByClass(HauntTongueEntity.class, new Box(pos).expand(16), t -> t.chest().equals(pos)).isEmpty()) return;
-		Entity living = nearest(world, Vec3d.ofCenter(pos), 16, ghost);
+		var busy = world.getEntitiesByClass(HauntTongueEntity.class, new Box(pos).expand(32), t -> t.targetId() >= 0).stream()
+			.map(HauntTongueEntity::targetId).collect(java.util.stream.Collectors.toSet());
+		Entity living = world.getEntitiesByClass(LivingEntity.class, new Box(pos).expand(16), HauntTongueEntity::canPull).stream()
+			.filter(e -> !busy.contains(e.getId()))
+			.filter(e -> e.squaredDistanceTo(Vec3d.ofCenter(pos)) <= 16 * 16)
+			.min(java.util.Comparator.comparingDouble(e -> e.squaredDistanceTo(Vec3d.ofCenter(pos)))).orElse(null);
 		ItemEntity item = nearestItem(world, Vec3d.ofCenter(pos), 16);
 		if (living == null && item == null) return;
-		world.spawnEntity(new HauntTongueEntity(world, pos, chest, living != null ? living : item));
+		world.addSyncedBlockEvent(pos, world.getBlockState(pos).getBlock(), 1, 1);
+		world.spawnEntity(new HauntTongueEntity(world, pos, living != null ? living : item, ghost));
 	}
 
 	private static void pumpkin(ServerWorld world, GhostHeadEntity ghost) {
@@ -214,14 +219,14 @@ public final class HauntBehaviors {
 	private static void armor(ServerWorld world, GhostHeadEntity ghost) {
 		if (!(ghost.host() instanceof ArmorStandEntity stand)) return;
 		stand.fallDistance = 0;
-		int chain = 1 + (ghost.age / 20) % HeadDepthRules.RABBIT_MAX_CHAIN;
-		if (stand.isOnGround() || stand.getVelocity().y <= 0 && ghost.age % 20 == 0) {
-			double vx = (world.random.nextDouble() - 0.5) * 0.25;
-			double vz = (world.random.nextDouble() - 0.5) * 0.25;
-			stand.setVelocity(vx, HeadDepthRules.rabbitJumpVelocity(chain), vz);
-			stand.velocityModified = true;
-			stand.setOnGround(false);
-		}
+		if (ghost.age % 20 != 0) return;
+		double homeY = ghost.hostBlock() != null ? ghost.hostBlock().getY() : stand.getY();
+		if (stand.getY() > homeY + 0.25) return;
+		double vx = (world.random.nextDouble() - 0.5) * 0.25;
+		double vz = (world.random.nextDouble() - 0.5) * 0.25;
+		stand.setVelocity(vx, HeadDepthRules.rabbitJumpVelocity(1), vz);
+		stand.velocityModified = true;
+		stand.setOnGround(false);
 	}
 
 	private static void carpet(ServerWorld world, GhostHeadEntity ghost) {
@@ -238,7 +243,7 @@ public final class HauntBehaviors {
 	private static void lantern(ServerWorld world, GhostHeadEntity ghost) {
 		if (!(ghost.host() instanceof PossessedPropEntity lantern)) return;
 		lantern.noClip = true;
-		lantern.setPosition(lantern.getX() + Math.sin(ghost.age * 0.2) * 0.01, lantern.getY(), lantern.getZ() + Math.cos(ghost.age * 0.17) * 0.01);
+		lantern.setVelocity(Vec3d.ZERO);
 		if (ghost.age % 8 == 0) lantern.setLight(world.random.nextBetween(0, 15));
 		BlockPos light = lantern.getBlockPos();
 		int level = Math.max(0, Math.min(15, lantern.light()));
@@ -246,13 +251,6 @@ public final class HauntBehaviors {
 		if (!world.getBlockState(light).isOf(Blocks.LIGHT)) {
 			if (world.getBlockState(light).isAir()) world.setBlockState(light, want);
 		} else if (world.getBlockState(light) != want) world.setBlockState(light, want);
-		if (ghost.age % 80 == 0) {
-			for (ServerPlayerEntity player : world.getPlayers()) {
-				if (player.squaredDistanceTo(lantern) <= 24 * 24 && ServerPlayNetworking.canSend(player, SonarS2CPayload.ID)) {
-					ServerPlayNetworking.send(player, new SonarS2CPayload(HeadRules.SONAR_TICKS));
-				}
-			}
-		}
 	}
 
 	private static LivingEntity nearest(ServerWorld world, Vec3d at, double range, Entity source) {

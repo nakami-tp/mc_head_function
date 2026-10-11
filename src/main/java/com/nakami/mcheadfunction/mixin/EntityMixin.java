@@ -20,4 +20,12 @@ public class EntityMixin {
 			cir.setReturnValue(null);
 		}
 	}
+	@Inject(method = "dropStack(Lnet/minecraft/item/ItemStack;F)Lnet/minecraft/entity/ItemEntity;", at = @At("HEAD"), cancellable = true)
+	private void mhf$chestMeal(ItemStack stack, float yOffset, CallbackInfoReturnable<ItemEntity> cir) {
+		Entity self = (Entity) (Object) this;
+		if (com.nakami.mcheadfunction.haunt.HauntMeal.capturing(self)) {
+			com.nakami.mcheadfunction.haunt.HauntMeal.collect(stack);
+			cir.setReturnValue(new ItemEntity(self.getWorld(), self.getX(), self.getY() + yOffset, self.getZ(), stack.copy()));
+		}
+	}
 }

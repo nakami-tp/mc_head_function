@@ -365,7 +365,7 @@ public class HeadGameplayTest implements FabricGameTest {
 		context.complete();
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 200)
+	@GameTest(templateName = "mc_head_function:enderman_arena", tickLimit = 200)
 	public void endermanEatsSixteenSameBlocks(TestContext context) {
 		var player = context.createMockCreativeServerPlayerInWorld();
 		for (int x = 0; x < 20; x++) {
@@ -383,7 +383,7 @@ public class HeadGameplayTest implements FabricGameTest {
 					remaining++;
 				}
 			}
-			context.assertTrue(remaining <= 4, "Enderman head must eat up to 16 connected stone, remaining=" + remaining);
+			context.assertTrue(remaining == 4, "Enderman head must eat exactly 16 connected stone, remaining=" + remaining);
 			context.complete();
 		});
 	}

@@ -1,1 +1,1 @@
-PASS town build, accessible furnished houses, all nine host budgets, rendered day/evening/interior, actual possession and settled deterministic reset
+PASS town build, accessible furnished houses, all nine host budgets, rendered day/evening/interior, actual possession, stationary flickering lanterns without client sonar, gate/outer roads/bridge, six villagers/fourteen animals and settled deterministic reset
