@@ -18,8 +18,10 @@ public final class PossessedPropRenderer extends EntityRenderer<PossessedPropEnt
 	@Override
 	public void render(PossessedPropEntity entity, float yaw, float delta, MatrixStack matrices, VertexConsumerProvider vertices, int light) {
 		matrices.push();
-		matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees((float) Math.sin((entity.age + delta) * 0.12) * 8));
 		var state = entity.block();
+		if (!(state.getBlock() instanceof net.minecraft.block.LanternBlock)) {
+			matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees((float) Math.sin((entity.age + delta) * 0.12) * 8));
+		}
 		if (state.getRenderType() == net.minecraft.block.BlockRenderType.ENTITYBLOCK_ANIMATED) {
 			MinecraftClient.getInstance().getItemRenderer().renderItem(state.getBlock().asItem().getDefaultStack(),
 				ModelTransformationMode.NONE, light, OverlayTexture.DEFAULT_UV, matrices, vertices, entity.getWorld(), entity.getId());

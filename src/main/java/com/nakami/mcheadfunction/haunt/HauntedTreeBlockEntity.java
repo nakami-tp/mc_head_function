@@ -33,6 +33,7 @@ public final class HauntedTreeBlockEntity extends BlockEntity implements HauntTr
 	private final HeadType[] slots = new HeadType[HauntRules.SLOTS];
 	private boolean haunting;
 	private long lastNight = HauntRules.NEVER;
+	private long until;
 	private final List<Wave> waves = new ArrayList<>();
 	private int age;
 
@@ -77,9 +78,7 @@ public final class HauntedTreeBlockEntity extends BlockEntity implements HauntTr
 		slots[index] = type;
 		if (!player.isCreative()) stack.decrement(1);
 		sync();
-		if (world instanceof ServerWorld server && HauntRules.shouldStart(HauntRules.isFull(hung()), haunting, server.getTimeOfDay(), lastNight)) {
-			start(false);
-		}
+		tryStart(true);
 	}
 
 	public void take(PlayerEntity player) {
@@ -106,6 +105,17 @@ public final class HauntedTreeBlockEntity extends BlockEntity implements HauntTr
 			if (index >= 0) slots[index] = type;
 		}
 		sync();
+		tryStart(true);
+	}
+
+	private void tryStart(boolean filled) {
+		if (!(world instanceof ServerWorld server)) return;
+		boolean disabled = HauntWorldData.get(server).off();
+		int hung = hungCount();
+		if ((filled && HauntRules.shouldStartWhenFilled(hung, haunting, disabled))
+			|| HauntRules.shouldStart(hung, haunting, disabled, server.getTimeOfDay(), lastNight)) {
+			start(false);
+		}
 	}
 
 	public void start(boolean force) {
@@ -113,9 +123,12 @@ public final class HauntedTreeBlockEntity extends BlockEntity implements HauntTr
 		if (haunting && !force) return;
 		haunting = true;
 		lastNight = HauntRules.night(server.getTimeOfDay());
+		until = HauntRules.hauntUntil(server.getTimeOfDay());
 		waves.clear();
-		for (HostKind kind : HostKind.values()) {
-			if (has(kind.head)) spawnWave(server, kind);
+		for (HeadType type : hung()) {
+			HostKind kind = HauntRules.host(type);
+			if (kind != null) spawnWave(server, kind);
+			else spawnWander(server, type);
 		}
 		server.playSound(null, pos, SoundEvents.BLOCK_BELL_USE, SoundCategory.BLOCKS, 1.2F, 0.55F);
 		server.playSound(null, pos, SoundEvents.AMBIENT_CAVE.value(), SoundCategory.AMBIENT, 0.8F, 0.6F);
@@ -125,6 +138,7 @@ public final class HauntedTreeBlockEntity extends BlockEntity implements HauntTr
 	public void stop() {
 		if (!haunting || !(world instanceof ServerWorld server)) return;
 		haunting = false;
+		until = 0;
 		waves.clear();
 		for (GhostHeadEntity ghost : ghosts(server)) ghost.releaseAndReturn();
 		sync();
@@ -134,8 +148,12 @@ public final class HauntedTreeBlockEntity extends BlockEntity implements HauntTr
 		if (!(world instanceof ServerWorld server)) return;
 		tree.age++;
 		long time = server.getTimeOfDay();
-		if (HauntRules.shouldEnd(tree.haunting, time)) tree.stop();
-		else if (HauntRules.shouldStart(HauntRules.isFull(tree.hung()), tree.haunting, time, tree.lastNight)) tree.start(false);
+		if (tree.haunting && tree.until == 0) {
+			if (!HauntRules.isHauntTime(time)) tree.stop();
+			else tree.until = HauntRules.hauntUntil(time);
+		}
+		if (HauntRules.shouldEnd(tree.haunting, time, tree.until)) tree.stop();
+		else tree.tryStart(false);
 		if (!tree.haunting) return;
 		tree.waves.removeIf(wave -> {
 			if (wave.delay-- > 0) return false;
@@ -154,6 +172,10 @@ public final class HauntedTreeBlockEntity extends BlockEntity implements HauntTr
 			var ghost = new GhostHeadEntity(world, this, hang, kind, gather, target);
 			world.spawnEntity(ghost);
 		}
+	}
+
+	private void spawnWander(ServerWorld world, HeadType type) {
+		world.spawnEntity(new GhostHeadEntity(world, this, hangSlot(type), type));
 	}
 
 	private int hangSlot(HeadType type) {
@@ -187,6 +209,7 @@ public final class HauntedTreeBlockEntity extends BlockEntity implements HauntTr
 		for (int i = 0; i < slots.length; i++) if (slots[i] != null) nbt.putString("s" + i, slots[i].name());
 		nbt.putBoolean("haunting", haunting);
 		nbt.putLong("lastNight", lastNight);
+		if (until != 0) nbt.putLong("until", until);
 	}
 
 	@Override
@@ -198,6 +221,7 @@ public final class HauntedTreeBlockEntity extends BlockEntity implements HauntTr
 		}
 		haunting = nbt.getBoolean("haunting");
 		lastNight = nbt.contains("lastNight") ? nbt.getLong("lastNight") : HauntRules.NEVER;
+		until = nbt.contains("until") ? nbt.getLong("until") : 0;
 	}
 
 	@Override

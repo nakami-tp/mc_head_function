@@ -20,6 +20,7 @@ public class McHeadFunction implements ModInitializer {
 		com.nakami.mcheadfunction.haunt.HauntBlocks.register();
 		HeadItems.register();
 		com.nakami.mcheadfunction.haunt.HauntCommand.register();
+		com.nakami.mcheadfunction.haunt.HauntTownResidents.register();
 		ModEntities.register();
 		ModNetworking.register();
 		WearHandler.register();

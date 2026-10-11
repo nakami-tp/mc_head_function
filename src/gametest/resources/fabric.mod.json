@@ -12,7 +12,9 @@
       "com.nakami.mcheadfunction.GolemGameplayTest",
       "com.nakami.mcheadfunction.FrogGameplayTest",
       "com.nakami.mcheadfunction.BeeGameplayTest",
-      "com.nakami.mcheadfunction.HauntGameplayTest"
+      "com.nakami.mcheadfunction.HauntGameplayTest",
+      "com.nakami.mcheadfunction.ChestMealGameplayTest",
+      "com.nakami.mcheadfunction.HauntTownGameplayTest"
     ]
   }
 }

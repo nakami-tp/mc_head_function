@@ -4,6 +4,7 @@
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"GolemCameraMixin",
+		"ChestMealMixin",
 		"AnimalModelAccessor",
 		"LivingEntityRendererMixin",
 		"MinecraftClientMixin",

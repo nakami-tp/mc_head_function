@@ -1,6 +1,7 @@
 package com.nakami.mcheadfunction.validation;
 
 import com.nakami.mcheadfunction.haunt.*;
+import com.nakami.mcheadfunction.client.McHeadFunctionClient;
 import com.nakami.mcheadfunction.rule.HauntRules.HostKind;
 import java.nio.file.*;
 import java.util.*;
@@ -28,6 +29,10 @@ public final class HauntTownValidation implements ClientModInitializer {
 	private volatile String failure;
 	private int ticks;
 	private Map<BlockPos, BlockState> beforeReset;
+	private final Map<Integer, Vec3d> lanternPositions = new HashMap<>();
+	private final Set<Integer> lanternLevels = new HashSet<>();
+	private int lanternId = -1;
+	private boolean brightCaptured, dimCaptured;
 	private final long started = System.nanoTime();
 	@Override public void onInitializeClient() { ClientTickEvents.END_CLIENT_TICK.register(this::tick); }
 
@@ -56,16 +61,25 @@ public final class HauntTownValidation implements ClientModInitializer {
 					world.getGameRules().get(GameRules.DO_MOB_SPAWNING).set(false, client.getServer());
 					world.getGameRules().get(GameRules.DO_DAYLIGHT_CYCLE).set(false, client.getServer());
 					world.getGameRules().get(GameRules.DO_WEATHER_CYCLE).set(false, client.getServer());
+					world.getGameRules().get(GameRules.DO_MOB_GRIEFING).set(false, client.getServer());
 					world.getGameRules().get(GameRules.RANDOM_TICK_SPEED).set(0, client.getServer());
 					world.setTimeOfDay(1000);
 					world.setWeather(0, 100000, false, false);
 					command(client, "haunt town build");
-					camera(client, 43, 34, 47, 137, 32);
+					camera(client, 74, 53, 82, 138, 32);
 					ready = true;
 				});
 			}
 			if (!ready) return;
 			ticks++;
+			if (ticks == 60) {
+				capture(client, "09-countryside-overview.png");
+				onServer(client, () -> camera(client, 0, 1, 48, 180, -8));
+			}
+			if (ticks == 100) {
+				capture(client, "10-main-gate.png");
+				onServer(client, () -> camera(client, 43, 34, 47, 137, 32));
+			}
 			if (ticks == 120) {
 				capture(client, "01-day-overview.png");
 				onServer(client, () -> { validate(client.getServer().getOverworld()); camera(client, 4, 2, 12, 165, -3); });
@@ -98,10 +112,40 @@ public final class HauntTownValidation implements ClientModInitializer {
 				onServer(client, () -> {
 					var world = client.getServer().getOverworld();
 					check(!world.getEntitiesByClass(PossessedPropEntity.class, HauntTargets.range(CENTER), e -> true).isEmpty(), "Must reach actual possession before reset");
+				});
+			}
+			if (ticks == 700) onServer(client, () -> {
+				var world = client.getServer().getOverworld();
+				var lanterns = world.getEntitiesByClass(PossessedPropEntity.class, HauntTargets.range(CENTER), e -> e.block().getBlock() instanceof LanternBlock);
+				check(!lanterns.isEmpty(), "Bat heads must possess lanterns");
+				var lantern = lanterns.getFirst();
+				// Put one possessed lantern above the open square for an unobstructed close-up.
+				lantern.setPosition(Vec3d.ofCenter(CENTER.south(12).up(10)));
+				for (var prop : lanterns) lanternPositions.put(prop.getId(), prop.getPos());
+				lanternId = lantern.getId();
+				camera(client, lantern.getX(), lantern.getY() - CENTER.getY() + 1, lantern.getZ() + 5, 180, 23);
+			});
+			if (ticks >= 720 && ticks < 880) {
+				check(McHeadFunctionClient.sonarTicks == 0, "Haunted lanterns must not trigger client sonar");
+				if (client.world.getEntityById(lanternId) instanceof PossessedPropEntity lantern) {
+					check(lantern.getPos().squaredDistanceTo(lanternPositions.get(lanternId)) < 0.0001, "Client lantern must stay in place");
+					lanternLevels.add(lantern.light());
+					if (!brightCaptured && lantern.light() >= 12) { capture(client, "07-lantern-bright.png"); brightCaptured = true; }
+					if (!dimCaptured && lantern.light() <= 3) { capture(client, "08-lantern-dim.png"); dimCaptured = true; }
+				}
+			}
+			if (ticks == 880) {
+				check(lanternLevels.size() >= 2 && brightCaptured && dimCaptured, "Client must receive both bright and dim lantern states");
+				onServer(client, () -> {
+					var world = client.getServer().getOverworld();
+					for (var entry : lanternPositions.entrySet()) {
+						var lantern = world.getEntityById(entry.getKey());
+						check(lantern != null && lantern.getPos().squaredDistanceTo(entry.getValue()) < 0.0001, "Server lantern must stay in place");
+					}
 					command(client, "haunt town reset");
 				});
 			}
-			if (ticks == 500) onServer(client, () -> {
+			if (ticks == 960) onServer(client, () -> {
 				var world = client.getServer().getOverworld();
 				var after = snapshot(world);
 				var differences = beforeReset.entrySet().stream().filter(e -> !e.getValue().equals(after.get(e.getKey()))).limit(12).map(e -> e.getKey() + ": " + e.getValue() + " -> " + after.get(e.getKey())).toList();
@@ -113,7 +157,13 @@ public final class HauntTownValidation implements ClientModInitializer {
 				check(drops.isEmpty(), "Reset left drops behind: " + drops.stream().map(e -> e.getStack() + " at " + e.getPos()).toList());
 				verified = true;
 			});
-			if (ticks >= 520 && verified) finish(client, "PASS town build, accessible furnished houses, all nine host budgets, rendered day/evening/interior, actual possession and settled deterministic reset");
+			if (ticks == 980) onServer(client, () -> { client.getServer().getOverworld().setTimeOfDay(1000); camera(client, -56, 7, 16, -133, 14); });
+			if (ticks == 1040) {
+				capture(client, "11-pond-bridge.png");
+				onServer(client, () -> camera(client, 31, 5, 49, 180, 18));
+			}
+			if (ticks == 1100) capture(client, "12-pasture-residents.png");
+			if (ticks >= 1110 && verified) finish(client, "PASS town build, accessible furnished houses, all nine host budgets, rendered day/evening/interior, actual possession, stationary flickering lanterns without client sonar, gate/outer roads/bridge, six villagers/fourteen animals and settled deterministic reset");
 		} catch (Throwable e) { finish(client, "FAIL " + e); }
 	}
 
@@ -134,8 +184,17 @@ public final class HauntTownValidation implements ClientModInitializer {
 		queue.add(CENTER.south(6));
 		while (!queue.isEmpty()) {
 			var pos = queue.removeFirst();
-			if (Math.abs(pos.getX()) > 31 || Math.abs(pos.getZ()) > 31 || !walkable(world, pos) || !reached.add(pos)) continue;
+			if (Math.abs(pos.getX()) >= 56 || Math.abs(pos.getZ()) >= 56 || !walkable(world, pos) || !reached.add(pos)) continue;
 			for (Direction dir : Direction.Type.HORIZONTAL) queue.add(pos.offset(dir));
+		}
+		for (var endpoint : List.of(CENTER.south(53), CENTER.north(53), CENTER.west(54), CENTER.east(53)))
+			check(reached.contains(endpoint), "Outer road/gate/bridge disconnected: " + endpoint);
+		var scenery = new Box(CENTER).expand(56, 20, 56);
+		check(world.getEntitiesByClass(net.minecraft.entity.passive.VillagerEntity.class, scenery, e -> e.isAlive()).size() == 6, "Town needs exactly six villagers after build/reset");
+		check(world.getEntitiesByClass(net.minecraft.entity.passive.AnimalEntity.class, scenery, e -> e.isAlive()).size() == 14, "Town needs exactly fourteen animals after build/reset");
+		for (var mob : world.getEntitiesByClass(net.minecraft.entity.mob.MobEntity.class, scenery, e -> true)) {
+			check(mob.isPersistent() && !mob.isAiDisabled(), "Resident must persist and retain normal AI: " + mob.getType());
+			check(world.isSpaceEmpty(mob), "Resident spawned inside blocks: " + mob.getPos());
 		}
 		for (var door : doors) {
 			check(reached.contains(door), "Entrance is disconnected from square: " + door);
@@ -156,7 +215,14 @@ public final class HauntTownValidation implements ClientModInitializer {
 	}
 	private static Map<BlockPos, BlockState> snapshot(ServerWorld world) {
 		var states = new HashMap<BlockPos, BlockState>();
-		for (var pos : BlockPos.iterate(CENTER.add(-32, -2, -32), CENTER.add(31, 16, 31))) states.put(pos.toImmutable(), world.getBlockState(pos));
+		for (var pos : BlockPos.iterate(CENTER.add(-56, -4, -56), CENTER.add(55, 16, 55))) {
+			var state = world.getBlockState(pos);
+			// Residents legitimately open doors, occupy beds and step on plates between captures.
+			if (state.getBlock() instanceof DoorBlock) state = state.with(DoorBlock.OPEN, false);
+			if (state.getBlock() instanceof BedBlock) state = state.with(BedBlock.OCCUPIED, false);
+			if (state.getBlock() instanceof PressurePlateBlock) state = state.with(PressurePlateBlock.POWERED, false);
+			states.put(pos.toImmutable(), state);
+		}
 		return states;
 	}
 

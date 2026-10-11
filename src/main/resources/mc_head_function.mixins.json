@@ -6,6 +6,7 @@
 		"EntityMixin",
 		"ItemMixin",
 		"LivingEntityMixin",
+		"LivingEntityDropInvoker",
 		"MobEntityMixin",
 		"PlayerEntityMixin",
 		"SculkSensorBlockEntityMixin"

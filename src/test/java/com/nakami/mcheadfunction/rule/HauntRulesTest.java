@@ -21,27 +21,41 @@ class HauntRulesTest {
 		assertEquals(HauntRules.night(18000) + 3, HauntRules.night(24000 * 3 + 20000));
 	}
 
-	@Test void fullTreeStartsOncePerNight() {
-		long midnight = 18000, laterThatNight = 21000, nextMidnight = 24000 + 18000;
-		assertTrue(HauntRules.shouldStart(true, false, midnight, HauntRules.NEVER));
-		assertTrue(HauntRules.shouldStart(true, false, laterThatNight, HauntRules.NEVER), "Filling the tree mid-night starts at once");
-		assertFalse(HauntRules.shouldStart(false, false, midnight, HauntRules.NEVER), "Tree must be full");
-		assertFalse(HauntRules.shouldStart(true, true, midnight, HauntRules.NEVER), "Already haunting");
-		assertFalse(HauntRules.shouldStart(true, false, 12000, HauntRules.NEVER), "Not during the day");
-		assertFalse(HauntRules.shouldStart(true, false, laterThatNight, HauntRules.night(midnight)), "Only once per night");
-		assertTrue(HauntRules.shouldStart(true, false, nextMidnight, HauntRules.night(midnight)), "Again the next night");
+	@Test void eightKindsStartOncePerNight() {
+		long midnight = 18000, laterThatNight = 21000, noon = 6000, nextMidnight = 24000 + 18000;
+		assertEquals(8, HauntRules.READY);
+		assertTrue(HauntRules.shouldStart(8, false, false, midnight, HauntRules.NEVER));
+		assertTrue(HauntRules.shouldStart(8, false, false, laterThatNight, HauntRules.NEVER), "Crossing the threshold mid-night starts at once");
+		assertTrue(HauntRules.shouldStart(19, false, false, midnight, HauntRules.NEVER));
+		assertFalse(HauntRules.shouldStart(7, false, false, midnight, HauntRules.NEVER), "Seven kinds stay quiet");
+		assertFalse(HauntRules.shouldStart(8, true, false, midnight, HauntRules.NEVER), "Already haunting");
+		assertFalse(HauntRules.shouldStart(8, false, false, noon, HauntRules.NEVER), "Eight kinds wait for midnight");
+		assertFalse(HauntRules.shouldStart(19, false, false, noon, HauntRules.NEVER), "A full tree does not restart every daytime tick");
+		assertFalse(HauntRules.shouldStart(8, false, false, laterThatNight, HauntRules.night(midnight)), "Only once per night");
+		assertTrue(HauntRules.shouldStart(8, false, false, nextMidnight, HauntRules.night(midnight)), "Again the next night");
+		assertFalse(HauntRules.shouldStart(19, false, true, midnight, HauntRules.NEVER), "A closed haunting stays closed");
+		assertFalse(HauntRules.shouldStart(8, false, true, midnight, HauntRules.NEVER));
 	}
 
-	@Test void treeGrowsEerierInFiveTiers() {
+	@Test void hangingTheNineteenthStartsAtOnce() {
+		assertTrue(HauntRules.shouldStartWhenFilled(19, false, false));
+		assertFalse(HauntRules.shouldStartWhenFilled(18, false, false), "Eighteen kinds still wait for midnight");
+		assertFalse(HauntRules.shouldStartWhenFilled(19, true, false), "Already haunting");
+		assertFalse(HauntRules.shouldStartWhenFilled(19, false, true), "A closed haunting stays closed");
+	}
+
+	@Test void treeGrowsEerierInFourTiers() {
 		assertEquals(0, HauntRules.tier(0));
-		assertEquals(0, HauntRules.tier(4));
+		assertEquals(0, HauntRules.tier(3));
+		assertEquals(1, HauntRules.tier(4));
 		assertEquals(1, HauntRules.tier(5));
-		assertEquals(1, HauntRules.tier(9));
-		assertEquals(2, HauntRules.tier(10));
-		assertEquals(2, HauntRules.tier(14));
-		assertEquals(3, HauntRules.tier(15));
-		assertEquals(3, HauntRules.tier(18));
-		assertEquals(4, HauntRules.tier(19));
+		assertEquals(2, HauntRules.tier(6));
+		assertEquals(2, HauntRules.tier(9));
+		assertEquals(3, HauntRules.tier(10));
+		assertEquals(3, HauntRules.tier(19));
+		assertFalse(HauntRules.headsGlow(9, false));
+		assertTrue(HauntRules.headsGlow(10, false), "Ten heads glow at any hour");
+		assertTrue(HauntRules.headsGlow(3, true), "A haunting tree glows even with few heads");
 	}
 
 	@Test void fullMeansAllNineteenKinds() {
@@ -86,9 +100,31 @@ class HauntRulesTest {
 		assertEquals(HauntRules.HostKind.CARPET, HauntRules.host(HeadType.CHICKEN));
 		assertEquals(HauntRules.HostKind.LANTERN, HauntRules.host(HeadType.BAT));
 		int possessing = 0;
-		for (HeadType type : HeadType.values()) if (HauntRules.host(type) != null) possessing++;
-		assertEquals(9, possessing, "The other ten kinds stay on the tree");
+		int wandering = 0;
+		for (HeadType type : HeadType.values()) {
+			if (HauntRules.host(type) != null) possessing++;
+			if (HauntRules.wanders(type)) wandering++;
+		}
+		assertEquals(9, possessing);
+		assertEquals(10, wandering, "The other ten kinds wander instead of possessing");
 		assertNull(HauntRules.host(HeadType.PIG));
+		assertTrue(HauntRules.wanders(HeadType.PIG));
+		assertTrue(HauntRules.wanders(HeadType.ENDERMAN));
+		assertFalse(HauntRules.wanders(HeadType.FROG));
+	}
+
+	@Test void wanderingGhostsStayInsideTheAgreedDrift() {
+		var seen = new java.util.HashSet<String>();
+		for (long seed = 0; seed < 80; seed++) {
+			var at = HauntRules.wanderOffset(new java.util.Random(seed));
+			double radius = Math.hypot(at.x(), at.z());
+			assertTrue(radius >= HauntRules.WANDER_MIN_RADIUS && radius <= HauntRules.WANDER_MAX_RADIUS,
+				"Wander radius must stay 6-28; got " + radius);
+			assertTrue(at.y() >= HauntRules.WANDER_MIN_Y && at.y() <= HauntRules.WANDER_MAX_Y,
+				"Wander height must stay 2-10; got " + at.y());
+			seen.add(Math.round(at.x()) + "," + Math.round(at.z()));
+		}
+		assertTrue(seen.size() > 20, "Wander points must spread around the tree, not stack");
 	}
 
 	@Test void defaultCountsMatchTheAgreedFirstVersion() {
@@ -126,10 +162,21 @@ class HauntRulesTest {
 		assertTrue(spread.size() > 3, "Choice is random rather than always the first candidates");
 	}
 
-	@Test void hauntingEndsWhenNightIsOver() {
-		assertFalse(HauntRules.shouldEnd(true, 22999));
-		assertTrue(HauntRules.shouldEnd(true, 23000), "Dawn");
-		assertTrue(HauntRules.shouldEnd(true, 1000), "Night skipped by sleeping or time change");
-		assertFalse(HauntRules.shouldEnd(false, 23000), "Nothing to end");
+	@Test void aFrogChestEatsBreakablePathBlocksButNotHostsOrBedrock() {
+		assertTrue(HauntRules.canFrogChestEat(false, false, false));
+		assertFalse(HauntRules.canFrogChestEat(true, false, false), "Bedrock stays");
+		assertFalse(HauntRules.canFrogChestEat(false, true, false), "The host chest and haunted tree stay");
+		assertFalse(HauntRules.canFrogChestEat(false, false, true), "Inventories stay");
+	}
+
+	@Test void hauntingEndsAtTheNextDawn() {
+		assertEquals(23000, HauntRules.hauntUntil(18000));
+		assertEquals(23000, HauntRules.hauntUntil(6000), "A full tree that starts by day lasts until that day's dawn");
+		assertEquals(24000 + 23000, HauntRules.hauntUntil(23000));
+		assertFalse(HauntRules.shouldEnd(true, 22999, 23000));
+		assertTrue(HauntRules.shouldEnd(true, 23000, 23000), "Dawn");
+		assertTrue(HauntRules.shouldEnd(true, 25000, 23000), "Night skipped by sleeping or time change");
+		assertFalse(HauntRules.shouldEnd(true, 12000, 23000), "A daytime start must not stop before dawn");
+		assertFalse(HauntRules.shouldEnd(false, 23000, 23000), "Nothing to end");
 	}
 }

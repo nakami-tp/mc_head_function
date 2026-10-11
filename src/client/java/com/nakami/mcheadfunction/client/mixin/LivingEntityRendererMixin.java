@@ -14,6 +14,7 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -23,9 +24,22 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, M extend
 	@Shadow
 	protected M model;
 
+	@Unique private int mhf$previousDeathTime;
+	@Unique private int mhf$previousHurtTime;
+
 	@Inject(method = "render", at = @At("HEAD"))
 	private void mhf$hideHead(T entity, float yaw, float tickDelta, MatrixStack matrices, VertexConsumerProvider consumers, int light, CallbackInfo ci) {
 		matrices.push();
+		var meal = com.nakami.mcheadfunction.client.ChestMealAnimation.tongue(entity);
+		float mealScale = meal == null ? 1 : meal.preyScale(tickDelta);
+		mhf$previousDeathTime = entity.deathTime;
+		mhf$previousHurtTime = entity.hurtTime;
+		if (meal != null && meal.deathTicks() > 0) {
+			// Reuse vanilla death rotation and red overlay without changing health or loot.
+			entity.deathTime = Math.max(entity.deathTime, Math.min(20, meal.deathTicks() * 2));
+			if (meal.deathTicks() <= 4) entity.hurtTime = Math.max(entity.hurtTime, 8);
+		}
+		if (mealScale < 1) matrices.scale(mealScale, mealScale, mealScale);
 		int crush = ((com.nakami.mcheadfunction.head.HeadCrushAccess) entity).mhf$crushTicks();
 		if (crush > 0) {
 			float amount = Math.min(1, crush / 5.0F);
@@ -40,6 +54,8 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, M extend
 			NeckCapRenderer.render(entity, matrices, consumers, light);
 		}
 		setHeadVisible(entity, true);
+		entity.deathTime = mhf$previousDeathTime;
+		entity.hurtTime = mhf$previousHurtTime;
 		matrices.pop();
 	}
 

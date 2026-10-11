@@ -3,6 +3,7 @@ package com.nakami.mcheadfunction.haunt;
 import com.nakami.mcheadfunction.entity.ModEntities;
 import com.nakami.mcheadfunction.head.HeadItems;
 import com.nakami.mcheadfunction.head.HeadType;
+import com.nakami.mcheadfunction.rule.HauntRules;
 import com.nakami.mcheadfunction.rule.HauntRules.HostKind;
 import java.util.UUID;
 import net.minecraft.block.Block;
@@ -22,15 +23,16 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
-/** A visible split of a hung head that flies to a host and drives it. */
+/** A visible split of a hung head: flies to a host, or wanders through walls if unpaired. */
 public final class GhostHeadEntity extends Entity {
 	private static final TrackedData<Integer> HEAD = DataTracker.registerData(GhostHeadEntity.class, TrackedDataHandlerRegistry.INTEGER);
 	private static final TrackedData<Integer> PHASE = DataTracker.registerData(GhostHeadEntity.class, TrackedDataHandlerRegistry.INTEGER);
-	public static final int FLY = 0, SPLIT = 1, HELD = 2, RETURN = 3;
-	private static final int FLY_TICKS = 20, SPLIT_TICKS = 15, RETURN_TICKS = 20;
+	private static final TrackedData<Boolean> WANDERING = DataTracker.registerData(GhostHeadEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
+	public static final int FLY = 0, SPLIT = 1, HELD = 2, RETURN = 3, WANDER = 4;
+	private static final int FLY_TICKS = 20, SPLIT_TICKS = 15, RETURN_TICKS = 20, WANDER_TICKS = 80;
 	private BlockPos tree = BlockPos.ORIGIN;
 	private int hang;
-	private HostKind kind = HostKind.PUMPKIN;
+	private HostKind kind;
 	private Vec3d from = Vec3d.ZERO, gather = Vec3d.ZERO, dest = Vec3d.ZERO;
 	private BlockPos hostBlock;
 	private UUID hostEntity;
@@ -41,6 +43,7 @@ public final class GhostHeadEntity extends Entity {
 	public GhostHeadEntity(EntityType<? extends GhostHeadEntity> type, World world) {
 		super(type, world);
 		noClip = true;
+		setNoGravity(true);
 	}
 
 	public GhostHeadEntity(ServerWorld world, HauntedTreeBlockEntity tree, int hang, HostKind kind, Vec3d gather, HauntTargets.Target target) {
@@ -62,10 +65,24 @@ public final class GhostHeadEntity extends Entity {
 		}
 	}
 
+	/** An unpaired hung head: fly out, then drift through walls until the haunting ends. */
+	public GhostHeadEntity(ServerWorld world, HauntedTreeBlockEntity tree, int hang, HeadType head) {
+		this(ModEntities.GHOST_HEAD, world);
+		this.tree = tree.getPos();
+		this.hang = hang;
+		this.from = HauntTreeShape.hangWorld(tree.getPos(), hang);
+		this.gather = wanderPoint(world);
+		this.dest = wanderPoint(world);
+		setHead(head);
+		dataTracker.set(WANDERING, true);
+		setPosition(from);
+	}
+
 	@Override
 	protected void initDataTracker(DataTracker.Builder builder) {
 		builder.add(HEAD, HeadType.ZOMBIE.ordinal());
 		builder.add(PHASE, FLY);
+		builder.add(WANDERING, false);
 	}
 
 	public HeadType head() { return HeadType.values()[dataTracker.get(HEAD)]; }
@@ -74,6 +91,7 @@ public final class GhostHeadEntity extends Entity {
 	public ItemStack stack() { return new ItemStack(HeadItems.item(head())); }
 	public BlockPos treePos() { return tree; }
 	public HostKind kind() { return kind; }
+	public boolean wandering() { return dataTracker.get(WANDERING); }
 	public BlockPos hostBlock() { return hostBlock; }
 	public Entity host() {
 		if (cachedHost != null && !cachedHost.isRemoved()) return cachedHost;
@@ -91,10 +109,20 @@ public final class GhostHeadEntity extends Entity {
 	public void tick() {
 		super.tick();
 		clock++;
-		if (phase() == FLY) move(from, gather, FLY_TICKS, SPLIT);
-		else if (phase() == SPLIT) {
+		if (phase() == FLY) {
+			move(from, gather, FLY_TICKS, wandering() ? WANDER : SPLIT);
+			if (phase() == WANDER) {
+				from = gather;
+			}
+		} else if (phase() == SPLIT) {
 			move(gather, dest, SPLIT_TICKS, HELD);
 			if (phase() == HELD && getWorld() instanceof ServerWorld server) attach(server);
+		} else if (phase() == WANDER) {
+			move(from, dest, WANDER_TICKS, WANDER);
+			if (clock == 0) {
+				from = dest;
+				dest = wanderPoint(getWorld());
+			}
 		} else if (phase() == HELD) {
 			followHost();
 			if (getWorld() instanceof ServerWorld server) HauntBehaviors.tick(server, this);
@@ -148,7 +176,7 @@ public final class GhostHeadEntity extends Entity {
 	protected void writeCustomDataToNbt(NbtCompound nbt) {
 		nbt.putLong("tree", tree.asLong());
 		nbt.putInt("hang", hang);
-		nbt.putString("kind", kind.name());
+		if (kind != null) nbt.putString("kind", kind.name());
 		nbt.putString("head", head().name());
 		nbt.putInt("phase", phase());
 		nbt.putInt("clock", clock);
@@ -164,8 +192,9 @@ public final class GhostHeadEntity extends Entity {
 	protected void readCustomDataFromNbt(NbtCompound nbt) {
 		tree = BlockPos.fromLong(nbt.getLong("tree"));
 		hang = nbt.getInt("hang");
-		kind = HostKind.valueOf(nbt.getString("kind"));
+		kind = nbt.contains("kind") ? HostKind.valueOf(nbt.getString("kind")) : null;
 		setHead(HeadType.valueOf(nbt.getString("head")));
+		dataTracker.set(WANDERING, kind == null);
 		dataTracker.set(PHASE, nbt.getInt("phase"));
 		clock = nbt.getInt("clock");
 		from = vec(nbt.getCompound("from"));
@@ -187,4 +216,9 @@ public final class GhostHeadEntity extends Entity {
 
 	public BlockState original() { return original; }
 	public void setOriginal(BlockState state) { original = state; }
+
+	private Vec3d wanderPoint(World world) {
+		HauntRules.Offset at = HauntRules.wanderOffset(new java.util.Random(world.random.nextLong()));
+		return Vec3d.ofCenter(tree).add(at.x(), at.y(), at.z());
+	}
 }
