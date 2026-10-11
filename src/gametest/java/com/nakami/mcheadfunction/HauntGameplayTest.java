@@ -187,19 +187,23 @@ public class HauntGameplayTest implements FabricGameTest {
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt", tickLimit = 10)
+	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt_town", tickLimit = 10)
 	public void townBuildPlacesEveryHostKind(TestContext c) {
 		var origin = c.getAbsolutePos(new BlockPos(16, 3, 16));
 		HauntTown.build(c.getWorld(), origin);
 		c.assertTrue(c.getWorld().getBlockEntity(origin) instanceof HauntedTreeBlockEntity, "Town must plant a haunted tree");
-		int pumpkins = 0, chests = 0, lanterns = 0;
-		for (var pos : BlockPos.iterate(origin.add(-20, -1, -20), origin.add(20, 6, 20))) {
+		var counts = new java.util.EnumMap<HauntRules.HostKind, Integer>(HauntRules.HostKind.class);
+		for (var pos : BlockPos.iterate(origin.add(-32, 0, -32), origin.add(31, 16, 31))) {
 			var state = c.getWorld().getBlockState(pos);
-			if (state.isOf(Blocks.CARVED_PUMPKIN) || state.isOf(Blocks.JACK_O_LANTERN)) pumpkins++;
-			if (state.isOf(Blocks.CHEST) || state.isOf(Blocks.TRAPPED_CHEST)) chests++;
-			if (state.isOf(Blocks.LANTERN) || state.isOf(Blocks.SOUL_LANTERN)) lanterns++;
+			for (var kind : HauntRules.HostKind.values()) {
+				if (com.nakami.mcheadfunction.haunt.HauntTargets.matches(kind, state)) counts.merge(kind, 1, Integer::sum);
+			}
 		}
-		c.assertTrue(pumpkins >= 7 && chests >= 4 && lanterns >= 7, "Town must beat the default possession counts: " + pumpkins + "/" + chests + "/" + lanterns);
+		var range = com.nakami.mcheadfunction.haunt.HauntTargets.range(origin);
+		counts.put(HauntRules.HostKind.MINECART, c.getWorld().getEntitiesByClass(MinecartEntity.class, range, e -> true).size());
+		counts.put(HauntRules.HostKind.ARMOR_STAND, c.getWorld().getEntitiesByClass(ArmorStandEntity.class, range, e -> true).size());
+		for (var kind : HauntRules.HostKind.values()) c.assertTrue(counts.getOrDefault(kind, 0) > kind.defaultCount,
+			"Town must have spare hosts for " + kind + ": " + counts.getOrDefault(kind, 0));
 		c.complete();
 	}
 

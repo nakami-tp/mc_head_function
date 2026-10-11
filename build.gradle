@@ -297,3 +297,30 @@ tasks.named('runRabbitValidation').configure {
 		}
 	}
 }
+
+// Furnished Halloween town: command/reset regression and real rendered views.
+sourceSets {
+	hauntValidation {
+		compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+		runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+	}
+}
+loom {
+	mods { haunt_town_validation { sourceSet sourceSets.hauntValidation } }
+	runs {
+		hauntValidation {
+			client()
+			source sourceSets.hauntValidation
+			runDir 'build/haunt-validation'
+		}
+	}
+}
+tasks.named('runHauntValidation').configure {
+	doFirst { delete 'build/haunt-validation/result.txt', 'build/haunt-validation/screenshots' }
+	doLast {
+		def result = file('build/haunt-validation/result.txt')
+		if (!result.exists() || !result.text.startsWith('PASS ')) {
+			throw new GradleException('Town validation failed; see build/haunt-validation/result.txt and logs.')
+		}
+	}
+}
