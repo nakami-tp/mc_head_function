@@ -483,6 +483,40 @@ tasks.named('runFurnaceValidation').configure {
 	}
 }
 
+// Goat cart wander and opportunistic boarding, isolated from town and player saves.
+sourceSets {
+	cartValidation {
+		compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+		runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+	}
+}
+loom {
+	mods { haunt_cart_validation { sourceSet sourceSets.cartValidation } }
+	runs {
+		cartValidation {
+			client()
+			source sourceSets.cartValidation
+			runDir 'build/cart-validation'
+		}
+	}
+}
+tasks.named('runCartValidation').configure {
+	doFirst { delete 'build/cart-validation/result.txt', 'build/cart-validation/screenshots' }
+	doLast {
+		def result = file('build/cart-validation/result.txt')
+		if (!result.exists() || !result.text.startsWith('PASS ')) {
+			throw new GradleException('Goat cart validation failed; see build/cart-validation/result.txt and logs.')
+		}
+		def visual = providers.exec {
+			workingDir rootDir
+			commandLine 'python3', 'scripts/testing/check-cart-wander.py', 'build/cart-validation/screenshots'
+		}
+		logger.lifecycle(visual.standardOutput.asText.get())
+		logger.lifecycle(visual.standardError.asText.get())
+		visual.result.get().assertNormalExitValue()
+	}
+}
+
 // Ghost takeoff, split and enter, isolated from town and player saves.
 tasks.named('runGhostValidation').configure {
 	doFirst { delete 'build/ghost-validation/result.txt', 'build/ghost-validation/screenshots' }
