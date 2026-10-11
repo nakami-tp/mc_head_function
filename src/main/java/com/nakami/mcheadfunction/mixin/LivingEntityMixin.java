@@ -26,7 +26,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LivingEntity.class)
-public abstract class LivingEntityMixin extends Entity implements com.nakami.mcheadfunction.head.HeadCrushAccess, HeadlessAccess, com.nakami.mcheadfunction.head.HeadStunAccess {
+public abstract class LivingEntityMixin extends Entity implements com.nakami.mcheadfunction.head.HeadCrushAccess, HeadlessAccess, com.nakami.mcheadfunction.head.HeadStunAccess, com.nakami.mcheadfunction.haunt.HauntRisenAccess {
 	@Unique
 	private static final TrackedData<Boolean> MHF_HEADLESS = DataTracker.registerData(LivingEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
 
@@ -39,6 +39,15 @@ public abstract class LivingEntityMixin extends Entity implements com.nakami.mch
 	private static final TrackedData<Integer> MHF_CRUSH = DataTracker.registerData(LivingEntity.class, TrackedDataHandlerRegistry.INTEGER);
 	@Override public int mhf$crushTicks() { return dataTracker.get(MHF_CRUSH); }
 	@Override public void mhf$crush(int ticks) { dataTracker.set(MHF_CRUSH, Math.max(ticks, mhf$crushTicks())); }
+
+	@Unique
+	private static final TrackedData<Boolean> MHF_HAUNT_DANCE = DataTracker.registerData(LivingEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
+	@Unique
+	private static final TrackedData<Integer> MHF_HAUNT_RISE = DataTracker.registerData(LivingEntity.class, TrackedDataHandlerRegistry.INTEGER);
+	@Override public boolean mhf$hauntDancing() { return dataTracker.get(MHF_HAUNT_DANCE); }
+	@Override public void mhf$setHauntDancing(boolean dancing) { dataTracker.set(MHF_HAUNT_DANCE, dancing); }
+	@Override public int mhf$hauntRiseTicks() { return dataTracker.get(MHF_HAUNT_RISE); }
+	@Override public void mhf$setHauntRiseTicks(int ticks) { dataTracker.set(MHF_HAUNT_RISE, Math.max(0, ticks)); }
 
 	@Unique
 	private float mhf$healthBeforeDamage;
@@ -71,6 +80,8 @@ public abstract class LivingEntityMixin extends Entity implements com.nakami.mch
 		builder.add(MHF_HEADLESS, false);
 		builder.add(MHF_STUNNED, false);
 		builder.add(MHF_CRUSH, 0);
+		builder.add(MHF_HAUNT_DANCE, false);
+		builder.add(MHF_HAUNT_RISE, 0);
 	}
 
 	@Override
@@ -86,11 +97,15 @@ public abstract class LivingEntityMixin extends Entity implements com.nakami.mch
 	@Inject(method = "writeCustomDataToNbt", at = @At("RETURN"))
 	private void mhf$writeHeadless(NbtCompound nbt, CallbackInfo ci) {
 		nbt.putBoolean("mhf_headless", mhf$isHeadless());
+		nbt.putBoolean("mhf_haunt_dance", mhf$hauntDancing());
+		nbt.putInt("mhf_haunt_rise", mhf$hauntRiseTicks());
 	}
 
 	@Inject(method = "readCustomDataFromNbt", at = @At("RETURN"))
 	private void mhf$readHeadless(NbtCompound nbt, CallbackInfo ci) {
 		mhf$setHeadless(nbt.getBoolean("mhf_headless"));
+		mhf$setHauntDancing(nbt.getBoolean("mhf_haunt_dance"));
+		mhf$setHauntRiseTicks(nbt.getInt("mhf_haunt_rise"));
 	}
 
 	@Inject(method = "handleFallDamage", at = @At("HEAD"), cancellable = true)
@@ -105,6 +120,12 @@ public abstract class LivingEntityMixin extends Entity implements com.nakami.mch
 	@Inject(method = "damage", at = @At("HEAD"), cancellable = true)
 	private void mhf$beforeDamage(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
 		LivingEntity self = (LivingEntity) (Object) this;
+		if (self instanceof net.minecraft.entity.passive.VillagerEntity villager
+			&& com.nakami.mcheadfunction.haunt.HauntVillagers.shouldConvert(villager, source)
+			&& com.nakami.mcheadfunction.haunt.HauntVillagers.convert(villager)) {
+			cir.setReturnValue(true);
+			return;
+		}
 		if (self instanceof ServerPlayerEntity player) {
 			if (source.isIn(DamageTypeTags.IS_FALL) && PlayerHeadAccess.state(player).creeperFallProtected) {
 				PlayerHeadAccess.state(player).creeperFallProtected = false;
@@ -130,6 +151,9 @@ public abstract class LivingEntityMixin extends Entity implements com.nakami.mch
 		if (self instanceof ServerPlayerEntity player) {
 			if (PlayerHeadAccess.state(player).rabbitFallProtected && source.isIn(DamageTypeTags.IS_FALL)) return 0;
 			return WearHandler.armadilloScale(player, amount);
+		}
+		if (self instanceof net.minecraft.entity.passive.VillagerEntity villager) {
+			return com.nakami.mcheadfunction.haunt.HauntVillagers.amount(villager, amount);
 		}
 		return amount;
 	}

@@ -2,6 +2,7 @@ package com.nakami.mcheadfunction;
 
 import com.nakami.mcheadfunction.haunt.GhostHeadEntity;
 import com.nakami.mcheadfunction.haunt.HauntBlocks;
+import com.nakami.mcheadfunction.haunt.HauntIndex;
 import com.nakami.mcheadfunction.haunt.HauntTongueEntity;
 import com.nakami.mcheadfunction.haunt.HauntTown;
 import com.nakami.mcheadfunction.haunt.HauntedTreeBlockEntity;
@@ -12,6 +13,7 @@ import com.nakami.mcheadfunction.rule.HauntRules;
 import net.fabricmc.fabric.api.gametest.v1.FabricGameTest;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.ai.brain.MemoryModuleType;
 import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.entity.vehicle.MinecartEntity;
 import net.minecraft.item.ItemStack;
@@ -21,6 +23,7 @@ import net.minecraft.test.TestContext;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.GlobalPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
@@ -388,6 +391,84 @@ public class HauntGameplayTest implements FabricGameTest {
 			c.assertTrue(!cow.isOnFire(), "Fireplace overflow must not ignite");
 			c.complete();
 		});
+	}
+
+	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt_villagers", tickLimit = 80)
+	public void villagersStayOutDuringAHaunting(TestContext c) {
+		var tree = plant(c, new BlockPos(4, 2, 4));
+		var world = c.getWorld();
+		for (var pos : java.util.List.copyOf(HauntIndex.trees(world))) {
+			if (world.getBlockEntity(pos) instanceof HauntedTreeBlockEntity other && other != tree) other.stop();
+		}
+		var bed = c.getAbsolutePos(new BlockPos(10, 2, 4));
+		world.setBlockState(bed, Blocks.RED_BED.getDefaultState());
+		var villager = EntityType.VILLAGER.create(world);
+		villager.refreshPositionAndAngles(bed.getX() + 0.5, bed.getY(), bed.getZ() + 0.5, 0, 0);
+		world.spawnEntity(villager);
+		villager.getBrain().remember(MemoryModuleType.HOME, GlobalPos.create(world.getRegistryKey(), bed));
+		villager.sleep(bed);
+		c.assertTrue(villager.isSleeping(), "Setup: the villager starts in bed");
+		world.setTimeOfDay(HauntRules.MIDNIGHT);
+		tree.start(true);
+		c.waitAndRun(5, () -> {
+			c.assertTrue(!villager.isSleeping(), "A haunting must wake villagers in range");
+			var treePos = tree.getPos();
+			villager.refreshPositionAndAngles(treePos.getX() + 0.5, treePos.getY(), treePos.getZ() + 0.5, 0, 0);
+			c.waitAndRun(40, () -> {
+				c.assertTrue(!villager.isSleeping(), "They must not go back to bed while it haunts");
+				double toTree = villager.squaredDistanceTo(treePos.getX() + 0.5, treePos.getY(), treePos.getZ() + 0.5);
+				c.assertTrue(toTree < 36, "They must stay out instead of walking home; dist2=" + toTree);
+				c.complete();
+			});
+		});
+	}
+
+	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt_linger", tickLimit = 20)
+	public void hauntingLeavesVillagersOnLastHealth(TestContext c) {
+		var tree = plant(c, new BlockPos(4, 2, 4));
+		var world = c.getWorld();
+		var villager = EntityType.VILLAGER.create(world);
+		var at = c.getAbsolutePos(new BlockPos(6, 2, 4));
+		villager.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
+		world.spawnEntity(villager);
+		world.setTimeOfDay(HauntRules.MIDNIGHT);
+		tree.start(true);
+		villager.damage(world.getDamageSources().generic(), 100);
+		c.assertTrue(villager.isAlive(), "A haunting must not let props kill a villager");
+		c.assertTrue(villager.getHealth() == 1, "They linger on the last half-heart; health=" + villager.getHealth());
+		c.complete();
+	}
+
+	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt_convert", tickLimit = 20)
+	public void aZombieBiteConvertsALingeringVillager(TestContext c) {
+		var tree = plant(c, new BlockPos(4, 2, 4));
+		var world = c.getWorld();
+		var at = c.getAbsolutePos(new BlockPos(6, 2, 4));
+		var villager = EntityType.VILLAGER.create(world);
+		villager.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
+		world.spawnEntity(villager);
+		var zombie = EntityType.ZOMBIE.create(world);
+		zombie.refreshPositionAndAngles(at.getX() + 1.5, at.getY(), at.getZ() + 0.5, 0, 0);
+		world.spawnEntity(zombie);
+		world.setTimeOfDay(HauntRules.MIDNIGHT);
+		tree.start(true);
+		villager.setHealth(1);
+		villager.damage(world.getDamageSources().mobAttack(zombie), 4);
+		c.assertTrue(villager.isRemoved(), "The last zombie bite must convert the villager");
+		c.assertTrue(!world.getEntitiesByClass(net.minecraft.entity.mob.ZombieVillagerEntity.class, new Box(at).expand(3), e -> true).isEmpty(),
+			"The villager must become a zombie villager");
+		c.complete();
+	}
+
+	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt_rising_none", tickLimit = 20)
+	public void aTreeWithoutATownDoesNotRaiseAGraveyard(TestContext c) {
+		var tree = plant(c, new BlockPos(4, 2, 4));
+		c.getWorld().setTimeOfDay(HauntRules.MIDNIGHT);
+		tree.start(true);
+		var extras = c.getWorld().getEntitiesByClass(net.minecraft.entity.mob.ZombieEntity.class,
+			new Box(tree.getPos()).expand(48), com.nakami.mcheadfunction.haunt.HauntGraveyardRising::isExtra);
+		c.assertTrue(extras.isEmpty(), "A tree with no town must not raise extras");
+		c.complete();
 	}
 
 	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "haunt")

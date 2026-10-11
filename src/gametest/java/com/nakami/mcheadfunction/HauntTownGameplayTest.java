@@ -1,6 +1,9 @@
 package com.nakami.mcheadfunction;
 
+import com.nakami.mcheadfunction.haunt.HauntGraveyardRising;
+import com.nakami.mcheadfunction.haunt.HauntRisenAccess;
 import com.nakami.mcheadfunction.haunt.HauntTown;
+import com.nakami.mcheadfunction.haunt.HauntTownLandmarks;
 import com.nakami.mcheadfunction.haunt.HauntedTreeBlockEntity;
 import com.nakami.mcheadfunction.rule.HauntRules;
 import net.fabricmc.fabric.api.gametest.v1.FabricGameTest;
@@ -37,7 +40,41 @@ public class HauntTownGameplayTest implements FabricGameTest {
 		var scenery = new Box(origin).expand(56, 20, 56);
 		c.assertTrue(c.getWorld().getEntitiesByClass(net.minecraft.entity.passive.VillagerEntity.class, scenery, e -> true).size() == 6, "Town must generate six villagers");
 		c.assertTrue(c.getWorld().getEntitiesByClass(net.minecraft.entity.passive.AnimalEntity.class, scenery, e -> true).size() == 14, "Town must generate fourteen animals");
+		var grave = HauntTownLandmarks.GRAVES.getFirst();
+		c.assertTrue(c.getWorld().getBlockState(origin.add(grave.x(), 0, grave.z())).isOf(Blocks.STONE_BRICK_WALL), "Town must plant the graveyard from the landmark table");
 		c.complete();
+	}
+
+	@GameTest(templateName = "mc_head_function:town_arena", batchId = "haunt_town_rising", tickLimit = 120)
+	public void townHauntingRaisesTheGraveyard(TestContext c) {
+		var world = c.getWorld();
+		var origin = c.getAbsolutePos(new BlockPos(60, 5, 60));
+		HauntTown.build(world, origin);
+		var tree = (HauntedTreeBlockEntity) world.getBlockEntity(origin);
+		world.setTimeOfDay(HauntRules.MIDNIGHT);
+		c.assertTrue(origin.equals(com.nakami.mcheadfunction.haunt.HauntWorldData.get(world).town()),
+			"Build must record this tree as the town");
+		tree.start(true);
+		c.waitAndRun(HauntRules.CLIMB_TICKS + HauntRules.riseStagger(HauntRules.RISING - 1) + 5, () -> {
+			int extras = 0;
+			for (var entity : world.iterateEntities()) if (HauntGraveyardRising.isExtra(entity)) extras++;
+			c.assertTrue(extras == HauntRules.RISING, "Ten extras must climb out; got " + extras
+				+ " town=" + com.nakami.mcheadfunction.haunt.HauntWorldData.get(world).town() + " tree=" + tree.getPos());
+			var area = new Box(origin).expand(56, 20, 56);
+			var risen = world.getEntitiesByClass(net.minecraft.entity.mob.ZombieEntity.class, area, HauntGraveyardRising::isExtra);
+			long villagers = risen.stream().filter(z -> z instanceof net.minecraft.entity.mob.ZombieVillagerEntity).count();
+			c.assertTrue(villagers == 5, "Half the extras must be zombie villagers; got " + villagers);
+			long dancers = risen.stream().filter(z -> HauntRisenAccess.dancing(z)).count();
+			c.assertTrue(dancers == HauntRules.DANCERS, "Five must dance at the gate; got " + dancers);
+			var gate = HauntTownLandmarks.GATE.get(2);
+			var atGate = world.getEntitiesByClass(net.minecraft.entity.mob.ZombieEntity.class,
+				new Box(origin.add(gate.x(), 0, gate.z())).expand(3, 2, 3), HauntRisenAccess::dancing);
+			c.assertTrue(!atGate.isEmpty(), "Dancers must stand at the graveyard gate");
+			tree.stop();
+			c.assertTrue(world.getEntitiesByClass(net.minecraft.entity.mob.ZombieEntity.class, area, HauntGraveyardRising::isExtra).isEmpty(),
+				"Stopping the haunting must take the extras back");
+			c.complete();
+		});
 	}
 
 	@GameTest(templateName = "mc_head_function:town_arena", batchId = "haunt_town_residents", tickLimit = 40)

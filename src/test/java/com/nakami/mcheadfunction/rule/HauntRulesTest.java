@@ -309,6 +309,67 @@ class HauntRulesTest {
 		assertTrue(Math.abs(HauntRules.wrapAngle(bounced)) > 0.8, "A hard block must break the line, not nudge it");
 	}
 
+	@Test void villagersStayOutOnlyInsideAnActiveHaunt() {
+		assertTrue(HauntRules.villagersStayOut(true, 0, 0, 0));
+		assertTrue(HauntRules.villagersStayOut(true, 48, 16, 48));
+		assertFalse(HauntRules.villagersStayOut(false, 0, 0, 0), "A quiet night is ordinary bedtime");
+		assertFalse(HauntRules.villagersStayOut(true, 49, 0, 0), "Outside the haunt they still go home");
+		assertFalse(HauntRules.villagersStayOut(true, 0, 17, 0));
+	}
+
+	@Test void tenRiseWithFiveOfEachRoleAndKind() {
+		assertEquals(10, HauntRules.RISING);
+		assertEquals(5, HauntRules.HUNTERS);
+		assertEquals(5, HauntRules.DANCERS);
+		int hunters = 0, dancers = 0, villagers = 0;
+		for (int i = 0; i < HauntRules.RISING; i++) {
+			if (HauntRules.risingHunter(i)) hunters++;
+			if (HauntRules.risingDancer(i)) dancers++;
+			if (HauntRules.risingZombieVillager(i)) villagers++;
+		}
+		assertEquals(5, hunters);
+		assertEquals(5, dancers);
+		assertEquals(5, villagers);
+		assertFalse(HauntRules.risingHunter(-1));
+		assertFalse(HauntRules.risingDancer(10));
+		assertEquals(0, HauntRules.riseStagger(0));
+		assertEquals(16, HauntRules.riseStagger(4));
+		assertEquals(HauntRules.RISE_DEPTH, HauntRules.riseBuried(HauntRules.CLIMB_TICKS), 0.001F);
+		assertEquals(HauntRules.RISE_DEPTH / 2, HauntRules.riseBuried(HauntRules.CLIMB_TICKS / 2.0F), 0.001F);
+		assertEquals(0, HauntRules.riseBuried(0), 0.001F);
+		assertEquals(HauntRules.RISE_DEPTH, HauntRules.riseBuried(44), 0.001F, "Staggered extras stay buried until they start");
+	}
+
+	@Test void lingeringVillagersStayOnTheLastHalfHeart() {
+		assertEquals(4, HauntRules.lingerAmount(false, 5, 4), 0.001F);
+		assertEquals(4, HauntRules.lingerAmount(true, 20, 4), 0.001F);
+		assertEquals(4, HauntRules.lingerAmount(true, 5, 4), 0.001F);
+		assertEquals(2, HauntRules.lingerAmount(true, 3, 10), 0.001F);
+		assertEquals(0, HauntRules.lingerAmount(true, 1, 4), 0.001F);
+	}
+
+	@Test void onlyALingeringZombieLastHitConverts() {
+		assertTrue(HauntRules.convertVillager(true, true, 1));
+		assertFalse(HauntRules.convertVillager(true, true, 3), "A nibble that leaves more than one heart is just damage");
+		assertFalse(HauntRules.convertVillager(true, false, 1), "Props leave them lingering");
+		assertFalse(HauntRules.convertVillager(false, true, 1), "A quiet night is ordinary death");
+	}
+
+	@Test void thrillerKeepsFourBeatsOnOneClock() {
+		assertEquals(80, HauntRules.DANCE_PERIOD);
+		assertEquals(HauntRules.DancePose.LEAN, HauntRules.thrillerPose(0));
+		assertEquals(HauntRules.DancePose.SNAP_LEFT, HauntRules.thrillerPose(20));
+		assertEquals(HauntRules.DancePose.SNAP_RIGHT, HauntRules.thrillerPose(40));
+		assertEquals(HauntRules.DancePose.LEAN, HauntRules.thrillerPose(80), "The line shares one clock");
+		assertTrue(HauntRules.thrillerPose(0).bodyPitch() < -0.2F, "Beat 0 leans back");
+		assertTrue(HauntRules.thrillerPose(20).headYaw() < -0.4F, "Beat 1 snaps left");
+		assertTrue(HauntRules.thrillerPose(40).headYaw() > 0.4F, "Beat 2 snaps right");
+		assertTrue(HauntRules.thrillerPose(67).leftArmRoll() > HauntRules.DancePose.LEAN.leftArmRoll(), "Beat 3 opens the arms");
+		assertTrue(HauntRules.thrillerPose(79).leftArmRoll() < HauntRules.thrillerPose(67).leftArmRoll(), "Then the arms slam down");
+		assertEquals(0, HauntRules.danceSway(0), 0.001);
+		assertTrue(HauntRules.danceSway(70) > 0);
+	}
+
 	@Test void hauntingEndsAtTheNextDawn() {
 		assertEquals(23000, HauntRules.hauntUntil(18000));
 		assertEquals(23000, HauntRules.hauntUntil(6000), "A full tree that starts by day lasts until that day's dawn");

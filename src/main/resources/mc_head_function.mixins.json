@@ -9,7 +9,8 @@
 		"LivingEntityDropInvoker",
 		"MobEntityMixin",
 		"PlayerEntityMixin",
-		"SculkSensorBlockEntityMixin"
+		"SculkSensorBlockEntityMixin",
+		"VillagerEntityMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

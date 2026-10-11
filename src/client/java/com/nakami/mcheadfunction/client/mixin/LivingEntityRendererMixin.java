@@ -2,8 +2,10 @@ package com.nakami.mcheadfunction.client.mixin;
 
 import com.nakami.mcheadfunction.client.NeckCapRenderer;
 import com.nakami.mcheadfunction.client.PigSwallowEffects;
+import com.nakami.mcheadfunction.haunt.HauntRisenAccess;
 import com.nakami.mcheadfunction.head.HeadlessAccess;
 import com.nakami.mcheadfunction.head.PigStuffedAccess;
+import com.nakami.mcheadfunction.rule.HauntRules;
 import com.nakami.mcheadfunction.rule.HeadRules;
 import java.util.Locale;
 import java.util.Map;
@@ -51,6 +53,9 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, M extend
 			float amount = Math.min(1, crush / 5.0F);
 			matrices.scale(1 + 0.45F * amount, 1 - 0.82F * amount, 1 + 0.45F * amount);
 		}
+		if (entity instanceof HauntRisenAccess risen && risen.mhf$hauntRiseTicks() > 0) {
+			matrices.translate(0, -HauntRules.riseBuried(risen.mhf$hauntRiseTicks() - tickDelta), 0);
+		}
 		if (entity instanceof PlayerEntity player) {
 			float fat = HeadRules.pigFatness(((PigStuffedAccess) player).mhf$stuffedTicks(), tickDelta);
 			if (fat > 0) {
@@ -63,6 +68,9 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, M extend
 
 	@Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/entity/model/EntityModel;setAngles(Lnet/minecraft/entity/Entity;FFFFF)V", shift = At.Shift.AFTER))
 	private void mhf$pigBelly(T entity, float yaw, float tickDelta, MatrixStack matrices, VertexConsumerProvider consumers, int light, CallbackInfo ci) {
+		if (model instanceof BipedEntityModel<?> biped && HauntRisenAccess.dancing(entity)) {
+			mhf$thriller(biped, HauntRules.thrillerPose(entity.getWorld().getTime()));
+		}
 		if (!(entity instanceof PlayerEntity player) || !(model instanceof BipedEntityModel<?> biped)) return;
 		float fat = HeadRules.pigFatness(((PigStuffedAccess) player).mhf$stuffedTicks(), tickDelta);
 		mhf$fatParts(biped, fat);
@@ -87,6 +95,24 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, M extend
 		entity.deathTime = mhf$previousDeathTime;
 		entity.hurtTime = mhf$previousHurtTime;
 		matrices.pop();
+	}
+
+	@Unique
+	private static void mhf$thriller(BipedEntityModel<?> biped, HauntRules.DancePose pose) {
+		biped.body.pitch = pose.bodyPitch();
+		biped.head.yaw = pose.headYaw();
+		biped.head.pitch = pose.headPitch();
+		biped.hat.copyTransform(biped.head);
+		biped.leftArm.roll = pose.leftArmRoll();
+		biped.rightArm.roll = pose.rightArmRoll();
+		biped.leftArm.pitch = pose.leftArmPitch();
+		biped.rightArm.pitch = pose.rightArmPitch();
+		biped.leftArm.yaw = 0;
+		biped.rightArm.yaw = 0;
+		biped.leftLeg.roll = pose.leftLegRoll();
+		biped.rightLeg.roll = pose.rightLegRoll();
+		biped.leftLeg.pitch = 0;
+		biped.rightLeg.pitch = 0;
 	}
 
 	@Unique

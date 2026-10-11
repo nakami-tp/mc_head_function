@@ -11,6 +11,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(MobEntity.class)
 public class MobEntityMixin {
@@ -37,5 +38,17 @@ public class MobEntityMixin {
 		if (HeadlessAccess.isHeadless(self)) {
 			HeadlessAi.suppress(self, goalSelector, targetSelector);
 		}
+	}
+
+	@Inject(method = "isDisallowedInPeaceful", at = @At("HEAD"), cancellable = true)
+	private void mhf$keepHauntExtras(CallbackInfoReturnable<Boolean> cir) {
+		if (com.nakami.mcheadfunction.haunt.HauntGraveyardRising.isExtra((MobEntity) (Object) this)) {
+			cir.setReturnValue(false);
+		}
+	}
+
+	@Inject(method = "checkDespawn", at = @At("HEAD"), cancellable = true)
+	private void mhf$hauntExtrasStay(CallbackInfo ci) {
+		if (com.nakami.mcheadfunction.haunt.HauntGraveyardRising.isExtra((MobEntity) (Object) this)) ci.cancel();
 	}
 }
