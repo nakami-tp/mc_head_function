@@ -86,7 +86,24 @@ public final class TreeEffectsValidation implements ClientModInitializer {
 				var player = client.getServer().getPlayerManager().getPlayerList().getFirst();
 				while (tree.hungCount() > 3) tree.take(player);
 			}); }
-			if (ticks == 660) { verify(client, 3, false); capture(client, "10-quiet-restored.png"); finish(client, "PASS server hang/take -> client 3/4/6/9/10 thresholds, day/night glow, minimal particles, haunting start/stop, transition captures"); }
+			if (ticks == 660) {
+				verify(client, 3, false); capture(client, "10-quiet-restored.png");
+				onServer(client, () -> {
+					var world = client.getServer().getOverworld();
+					world.setTimeOfDay(1000);
+					hangTo(client, 10);
+					client.getServer().getPlayerManager().getPlayerList().getFirst().teleport(world, 6, -56, 9, 146, 0);
+				});
+			}
+			if (ticks == 740) {
+				verify(client, 10, false); capture(client, "11-pixel-embers-day-close.png");
+				client.options.getParticles().setValue(ParticlesMode.ALL);
+				onServer(client, () -> client.getServer().getOverworld().setTimeOfDay(14000));
+			}
+			if (ticks == 800) {
+				verify(client, 10, false); capture(client, "12-pixel-embers-night-close.png");
+				finish(client, "PASS server hang/take -> client 3/4/6/9/10 thresholds, day/night glow, minimal particles, haunting start/stop, transition and pixel sprite close-up captures");
+			}
 		} catch (Throwable e) { finish(client, "FAIL " + e); }
 	}
 	private static void hangTo(MinecraftClient client, int count) {
