@@ -57,7 +57,7 @@ public final class HauntedTreeRenderer implements BlockEntityRenderer<HauntedTre
 			MinecraftClient.getInstance().getItemRenderer().renderItem(new ItemStack(HeadItems.item(type)),
 				ModelTransformationMode.FIXED, headLight, OverlayTexture.DEFAULT_UV, matrices, vertices, world, i);
 			matrices.pop();
-			HauntedTreeAtmosphere.headHalo(atmosphereState, frameTime, i, hang.add(swing, -0.15, 0), matrices, vertices);
+			HauntedTreeAtmosphere.headEmbers(atmosphereState, frameTime, i, hang.add(swing, -0.15, 0), matrices, vertices);
 		}
 		HauntedTreeAtmosphere.render(atmosphereState, delta, matrices, vertices);
 	}

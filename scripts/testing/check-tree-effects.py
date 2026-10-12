@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Check actual fixed-camera tree captures for visible cyan effects, not just full-bright items.
+"""Check actual fixed-camera tree captures for compact vanilla-style soul fire, without broad cyan halos.
 
 Requires Pillow. Run after ./gradlew runTreeValidation; thresholds scale with resolution.
-The scene has no other cyan emitters. These broad checks complement visual review.
+The scene has no other cyan emitters. Lower bounds catch missing embers; upper bounds reject the previous broad halos.
+These broad checks complement visual review; they do not judge artistic style.
 """
 import argparse
 from pathlib import Path
@@ -25,13 +26,13 @@ def main():
     args = parser.parse_args()
     bounds = {
         "01-three-quiet.png": (0, .00015),
-        "03-six-souls.png": (.00018, .0018),
-        "04-awakening.png": (.003, .025),
-        "05-ten-glow-night.png": (.002, .018),
-        "06-ten-glow-day.png": (.0006, .015),
-        "07-minimal-particles.png": (.0006, .015),
-        "08-haunt-awakening.png": (.003, .025),
-        "09-haunting.png": (.002, .018),
+        "03-six-souls.png": (.000008, .0002),
+        "04-awakening.png": (.0002, .0015),
+        "05-ten-glow-night.png": (.00015, .0012),
+        "06-ten-glow-day.png": (.00008, .0012),
+        "07-minimal-particles.png": (.00008, .0012),
+        "08-haunt-awakening.png": (.0002, .0015),
+        "09-haunting.png": (.00015, .0012),
         "10-quiet-restored.png": (0, .00015),
     }
     failures = []
