@@ -42,6 +42,23 @@ def main():
         print(f"{'PASS' if ok else 'FAIL'} {name}: cyan coverage {value:.5%}")
         if not ok:
             failures.append(name)
+    # Fixed close camera: the zombie head below its flame. Head-top fire cannot satisfy this.
+    for name in ("11-pixel-embers-day-close.png", "12-pixel-embers-night-close.png"):
+        with Image.open(args.screenshots / name) as image:
+            image = image.convert("RGB")
+            width, height = image.size
+            body = image.crop((int(width * .52), int(height * .71), int(width * .58), int(height * .75)))
+            bright = sum(g > 100 and g > r * 1.2 and b > r * 1.2 for r, g, b in body.getdata())
+            coverage = bright / (body.width * body.height)
+            ok = .035 <= coverage <= .25
+            print(f"{'PASS' if ok else 'FAIL'} {name}: head-body edge coverage {coverage:.2%}")
+            if not ok:
+                failures.append(name + " head body")
+    occluded = cyan_fraction(args.screenshots / "13-glow-occluded.png")
+    ok = occluded < .00002
+    print(f"{'PASS' if ok else 'FAIL'} wall occlusion: cyan coverage {occluded:.5%}")
+    if not ok:
+        failures.append("wall occlusion")
     if failures:
         raise SystemExit("Tree visual regression: " + ", ".join(failures))
 

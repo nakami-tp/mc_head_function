@@ -6,6 +6,7 @@ import com.nakami.mcheadfunction.rule.HauntRules;
 import java.nio.file.*;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.ParticlesMode;
 import net.minecraft.client.util.ScreenshotRecorder;
@@ -100,9 +101,16 @@ public final class TreeEffectsValidation implements ClientModInitializer {
 				client.options.getParticles().setValue(ParticlesMode.ALL);
 				onServer(client, () -> client.getServer().getOverworld().setTimeOfDay(14000));
 			}
-			if (ticks == 800) {
-				verify(client, 10, false); capture(client, "12-pixel-embers-night-close.png");
-				finish(client, "PASS server hang/take -> client 3/4/6/9/10 thresholds, day/night glow, minimal particles, haunting start/stop, transition and pixel sprite close-up captures");
+			if (ticks >= 760 && ticks < 840) capture(client, String.format("head-glow-%03d.png", ticks - 759));
+			if (ticks == 800) { verify(client, 10, false); capture(client, "12-pixel-embers-night-close.png"); }
+			if (ticks == 840) onServer(client, () -> {
+				var world = client.getServer().getOverworld();
+				for (int x = -6; x <= 9; x++) for (int y = 0; y <= 14; y++)
+					world.setBlockState(TREE.add(x, y, 5), Blocks.STONE.getDefaultState());
+			});
+			if (ticks == 880) {
+				verify(client, 10, false); capture(client, "13-glow-occluded.png");
+				finish(client, "PASS server hang/take -> client 3/4/6/9/10 thresholds, day/night glow, minimal particles, haunting start/stop, transition, emissive head close-ups and wall occlusion captures");
 			}
 		} catch (Throwable e) { finish(client, "FAIL " + e); }
 	}
