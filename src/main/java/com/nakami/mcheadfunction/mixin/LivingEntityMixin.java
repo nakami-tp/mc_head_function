@@ -26,7 +26,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LivingEntity.class)
-public abstract class LivingEntityMixin extends Entity implements com.nakami.mcheadfunction.head.HeadCrushAccess, HeadlessAccess, com.nakami.mcheadfunction.head.HeadStunAccess, com.nakami.mcheadfunction.haunt.HauntRisenAccess {
+public abstract class LivingEntityMixin extends Entity implements com.nakami.mcheadfunction.head.HeadShakeAccess, com.nakami.mcheadfunction.head.HeadCrushAccess, HeadlessAccess, com.nakami.mcheadfunction.head.HeadStunAccess, com.nakami.mcheadfunction.haunt.HauntRisenAccess {
+	@Unique
+	private static final TrackedData<Integer> MHF_HEAD_SHAKE = DataTracker.registerData(LivingEntity.class, TrackedDataHandlerRegistry.INTEGER);
+	@Override public int mhf$headShakeTicks() { return dataTracker.get(MHF_HEAD_SHAKE); }
+	@Override public void mhf$setHeadShakeTicks(int ticks) { dataTracker.set(MHF_HEAD_SHAKE, Math.max(0, ticks)); }
+
 	@Unique
 	private static final TrackedData<Boolean> MHF_HEADLESS = DataTracker.registerData(LivingEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
 
@@ -58,6 +63,7 @@ public abstract class LivingEntityMixin extends Entity implements com.nakami.mch
 
 	@Inject(method = "tick", at = @At("HEAD"))
 	private void mhf$tickStun(CallbackInfo ci) {
+		if (!getWorld().isClient() && mhf$headShakeTicks() > 0) mhf$setHeadShakeTicks(mhf$headShakeTicks() - 1);
 		com.nakami.mcheadfunction.wear.GoatCharge.tickTarget((LivingEntity) (Object) this);
 		if (!getWorld().isClient() && mhf$crushTicks() > 0) {
 			dataTracker.set(MHF_CRUSH, mhf$crushTicks() - 1);
@@ -78,6 +84,7 @@ public abstract class LivingEntityMixin extends Entity implements com.nakami.mch
 	@Inject(method = "initDataTracker", at = @At("RETURN"))
 	private void mhf$initHeadless(DataTracker.Builder builder, CallbackInfo ci) {
 		builder.add(MHF_HEADLESS, false);
+		builder.add(MHF_HEAD_SHAKE, 0);
 		builder.add(MHF_STUNNED, false);
 		builder.add(MHF_CRUSH, 0);
 		builder.add(MHF_HAUNT_DANCE, false);

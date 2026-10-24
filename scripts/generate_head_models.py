@@ -50,6 +50,8 @@ for name,(texture,tw,th,parts) in HEADS.items():
  'firstperson_righthand':{'rotation':[0,155,0],'translation':[0,2,0],'scale':[0.8]*3},
  'firstperson_lefthand':{'rotation':[0,205,0],'translation':[0,2,0],'scale':[0.8]*3}}}
  if name=='enderman':
+  # Vanilla has no opaque underside here; a tumbling detached head needs a closed bottom.
+  model['elements'][0]['faces']['down']['uv']=model['elements'][0]['faces']['up']['uv'].copy()
   model['textures']['eyes']='minecraft:entity/enderman/enderman_eyes'
   eyes=element((4,4,3.99,8,8,8,0,0),64,32,'eyes')
   eyes['faces']={k:v for k,v in eyes['faces'].items() if k=='north'}

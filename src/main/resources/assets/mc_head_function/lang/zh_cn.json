@@ -32,7 +32,7 @@
   "head.mc_head_function.blaze_head.wear": "按住 %s 喷火蓄热 · 高热松手放火浪 · 过热停火 · 火焰免疫",
   "head.mc_head_function.blaze_head.throw": "左键投掷：铺设 6 秒火径；火浪可沿自己的火径传播",
   "head.mc_head_function.iron_golem_head.wear": "增强护甲、伤害与击退",
-  "head.mc_head_function.iron_golem_head.throw": "左键投掷：八倍铁头向前碾压，下坡加速，高处落地砸坑震地",
+  "head.mc_head_function.iron_golem_head.throw": "左键投掷：小头落点引下八倍巨头，砸地后向前碾压，下坡加速",
   "head.mc_head_function.goat_head.wear": "%s：惯性冲锋 / 停止 · 锁定视角，左右移动键转向 · 命中击飞，落地眩晕 · 按硬度逐步撞碎方块",
   "head.mc_head_function.goat_head.throw": "左键投掷：撞击并顶飞目标",
   "head.mc_head_function.pig_head.wear": "进食获得更多饱和度",
@@ -166,5 +166,10 @@
   "haunt.mc_head_function.count_set": "%s 附身件数设为 %s",
   "haunt.mc_head_function.town_built": "闹鬼小镇已经铺好",
   "haunt.mc_head_function.town_reset": "闹鬼小镇已经重建",
-  "haunt.mc_head_function.tree_filled": "枯树已经挂上头"
+  "haunt.mc_head_function.tree_filled": "枯树已经挂上头",
+  "item.mc_head_function.beheading_glove": "断头拳套",
+  "item.mc_head_function.beheading_glove.hint": "主手左键：任意部位两秒内连打三拳断头，不造成伤害；成功断头消耗1耐久",
+  "subtitles.mc_head_function.punch_one": "拳套击中",
+  "subtitles.mc_head_function.punch_two": "拳套重击",
+  "subtitles.mc_head_function.punch_finish": "头被打飞"
 }

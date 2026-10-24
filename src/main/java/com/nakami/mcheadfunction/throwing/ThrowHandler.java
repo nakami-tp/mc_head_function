@@ -32,8 +32,17 @@ public final class ThrowHandler {
 		HeadSounds.launch(player, type);
 	}
 
-	public static void knockOff(PlayerEntity player, HeadType type) {
-		spawn(player, type, HeadType.ThrowStyle.KNOCK_OFF, 0.85F, false);
+	public static void knockOff(PlayerEntity player, net.minecraft.entity.LivingEntity victim, HeadType type) {
+		ThrownHeadEntity thrown = new ThrownHeadEntity(player.getWorld(), player, type, HeadType.ThrowStyle.KNOCK_OFF);
+		thrown.ignoreKnockedFrom(victim);
+		// The renderer's center is 0.36 blocks above the projectile's feet.
+		thrown.setPosition(victim.getX(), victim.getEyeY() - 0.36, victim.getZ());
+		Vec3d forward = player.getRotationVec(1).multiply(1, 0, 1);
+		if (forward.lengthSquared() < 0.001) forward = victim.getPos().subtract(player.getPos()).multiply(1, 0, 1);
+		if (forward.lengthSquared() < 0.001) forward = Vec3d.fromPolar(0, player.getYaw());
+		thrown.setVelocity(forward.normalize().multiply(0.34).add(0, 0.20, 0));
+		thrown.setNoGravity(false);
+		player.getWorld().spawnEntity(thrown);
 	}
 
 	private static void spawn(PlayerEntity player, HeadType type, HeadType.ThrowStyle style, float speed, boolean gravityArc) {
@@ -53,14 +62,6 @@ public final class ThrowHandler {
 			};
 			thrown.setVelocity(look.x, look.y, look.z, launch, 0.0F);
 			thrown.setNoGravity(style != HeadType.ThrowStyle.KNOCK_OFF && style != HeadType.ThrowStyle.ZOMBIE_HOP && style != HeadType.ThrowStyle.GOLEM_ROLL);
-		}
-		if (style == HeadType.ThrowStyle.GOLEM_ROLL) {
-			Vec3d forward = look.multiply(1, 0, 1);
-			if (forward.lengthSquared() < 0.001) forward = Vec3d.fromPolar(0, player.getYaw());
-			forward = forward.normalize();
-			// Beyond both the full rolling silhouette and the player's body, even on diagonals.
-			thrown.setPosition(player.getPos().add(forward.multiply(4.5)).add(0, 0.1, 0));
-			thrown.setVelocity(forward.multiply(ThrownHeadEntity.GOLEM_SPEED));
 		}
 		world.spawnEntity(thrown);
 		if (style == HeadType.ThrowStyle.BAT_SONAR && thrown.getWorld() instanceof net.minecraft.server.world.ServerWorld) {

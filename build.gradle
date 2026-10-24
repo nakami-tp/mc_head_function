@@ -527,3 +527,30 @@ tasks.named('runGhostValidation').configure {
 		}
 	}
 }
+
+// Actual beheading and model visibility, isolated from user saves.
+sourceSets {
+    beheadingValidation {
+        compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+        runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+    }
+}
+loom {
+    mods { beheading_client_validation { sourceSet sourceSets.beheadingValidation } }
+    runs {
+        beheadingValidation {
+            client()
+            source sourceSets.beheadingValidation
+            runDir 'build/beheading-validation'
+        }
+    }
+}
+tasks.named('runBeheadingValidation').configure {
+    doFirst { delete 'build/beheading-validation/result.txt', 'build/beheading-validation/screenshots' }
+    doLast {
+        def result = file('build/beheading-validation/result.txt')
+        if (!result.exists() || !result.text.startsWith('PASS ')) {
+            throw new GradleException('Beheading validation failed; see build/beheading-validation/result.txt and logs.')
+        }
+    }
+}

@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "package": "com.nakami.mcheadfunction.validation.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "BeheadingRenderProbe",
+    "GloveValidationProbe",
+    "GloveCameraMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

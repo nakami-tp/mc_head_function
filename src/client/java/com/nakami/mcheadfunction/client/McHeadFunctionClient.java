@@ -25,6 +25,8 @@ public class McHeadFunctionClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.BlazeFlameS2CPayload.ID,
+			(payload, context) -> context.client().execute(() -> BlazeBreathEffects.receive(context.client(), payload)));
 		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.GoatChargeS2CPayload.ID,
 			(payload, context) -> context.client().execute(() -> GoatChargeControl.receive(payload)));
 		ClientTickEvents.END_CLIENT_TICK.register(client -> GoatChargeControl.tick());
@@ -104,7 +106,6 @@ public class McHeadFunctionClient implements ClientModInitializer {
 		});
 		ClientTickEvents.END_CLIENT_TICK.register(new SkillKeyTracker());
 		WorldRenderEvents.AFTER_ENTITIES.register(SonarWorldRender::afterEntities);
-		WorldRenderEvents.AFTER_ENTITIES.register(BlazeHeatRender::render);
 		ClientTickEvents.END_CLIENT_TICK.register(PigSwallowEffects::tick);
 		ClientTickEvents.END_CLIENT_TICK.register(HauntPumpkinEffects::tick);
 		WorldRenderEvents.AFTER_ENTITIES.register(HauntPumpkinEffects::afterEntities);

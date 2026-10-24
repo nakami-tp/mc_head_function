@@ -10,6 +10,7 @@ public final class ModNetworking {
 	}
 
 	public static void register() {
+		PayloadTypeRegistry.playS2C().register(BlazeFlameS2CPayload.ID, BlazeFlameS2CPayload.CODEC);
 		PayloadTypeRegistry.playS2C().register(GoatChargeS2CPayload.ID, GoatChargeS2CPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(GoatSteerC2SPayload.ID, GoatSteerC2SPayload.CODEC);
 		ServerPlayNetworking.registerGlobalReceiver(GoatSteerC2SPayload.ID, (payload, context) ->

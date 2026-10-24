@@ -1,0 +1,29 @@
+def flashbackJar = file(project.findProperty('filmFlashbackJar') ?: 'video/intro/eight-heads/runtime/flashback-0.39.7.jar')
+dependencies {
+    modImplementation files(flashbackJar)
+    // Loom does not expose nested local-JAR dependencies to a development launch.
+    modImplementation fileTree('video/intro/eight-heads/runtime/deps') { include '*.jar' }
+}
+sourceSets {
+    headFilm {
+        java.srcDir 'tools/head-film/java'
+        resources.srcDir 'tools/head-film/resources'
+        compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+        runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+    }
+}
+loom {
+    mods { head_film { sourceSet sourceSets.headFilm } }
+    runs { headFilm {
+        client(); source sourceSets.headFilm
+        runDir 'video/intro/eight-heads/run'
+        vmArg '-Xmx6G'
+        vmArg "-Dfilm.root=${file('video/intro/eight-heads').absolutePath}"
+        vmArg "-Dfilm.mode=${project.findProperty('filmMode') ?: 'pilot'}"
+        vmArg "-Dfilm.take=${project.findProperty('filmTake') ?: ''}"
+        vmArg "-Dfilm.only=${project.findProperty('filmOnly') ?: ''}"
+        vmArg "-Dfilm.scenes=${project.findProperty('filmScenes') ?: ''}"
+        programArg '--width'; programArg '1280'; programArg '--height'; programArg '720'
+        programArg '--username'; programArg 'HeadDirector'
+    } }
+}

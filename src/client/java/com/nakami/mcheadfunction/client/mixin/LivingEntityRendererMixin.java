@@ -1,6 +1,5 @@
 package com.nakami.mcheadfunction.client.mixin;
 
-import com.nakami.mcheadfunction.client.NeckCapRenderer;
 import com.nakami.mcheadfunction.client.PigSwallowEffects;
 import com.nakami.mcheadfunction.haunt.HauntRisenAccess;
 import com.nakami.mcheadfunction.head.HeadlessAccess;
@@ -32,6 +31,7 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, M extend
 	@Shadow
 	protected M model;
 
+	@Unique private final com.nakami.mcheadfunction.client.HeadShakeRender mhf$headShake = new com.nakami.mcheadfunction.client.HeadShakeRender();
 	@Unique private int mhf$previousDeathTime;
 	@Unique private int mhf$previousHurtTime;
 
@@ -63,15 +63,19 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, M extend
 				matrices.scale(1 + 0.32F * fat, 1 + 0.08F * fat, 1 + 0.24F * fat);
 			}
 		}
-		setHeadVisible(entity, !HeadlessAccess.isHeadless(entity));
 	}
 
 	@Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/entity/model/EntityModel;setAngles(Lnet/minecraft/entity/Entity;FFFFF)V", shift = At.Shift.AFTER))
 	private void mhf$pigBelly(T entity, float yaw, float tickDelta, MatrixStack matrices, VertexConsumerProvider consumers, int light, CallbackInfo ci) {
+		// Enderman setAngles explicitly makes the head visible again. Hide after animation,
+		// before both the body pass and feature passes (including glowing eyes).
+		setHeadVisible(entity, !HeadlessAccess.isHeadless(entity));
+		mhf$headShake.apply(entity, model, tickDelta);
 		if (model instanceof BipedEntityModel<?> biped && HauntRisenAccess.dancing(entity)) {
 			mhf$thriller(biped, HauntRules.thrillerPose(entity.getWorld().getTime()));
 		}
 		if (!(entity instanceof PlayerEntity player) || !(model instanceof BipedEntityModel<?> biped)) return;
+		com.nakami.mcheadfunction.client.GloveRenderer.pose(player, biped, tickDelta);
 		float fat = HeadRules.pigFatness(((PigStuffedAccess) player).mhf$stuffedTicks(), tickDelta);
 		mhf$fatParts(biped, fat);
 		float swallow = HeadRules.pigSwallowProgress(((PigStuffedAccess) player).mhf$stuffedTicks(), tickDelta);
@@ -84,13 +88,11 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, M extend
 
 	@Inject(method = "render", at = @At("RETURN"))
 	private void mhf$restoreHead(T entity, float yaw, float tickDelta, MatrixStack matrices, VertexConsumerProvider consumers, int light, CallbackInfo ci) {
-		if (HeadlessAccess.isHeadless(entity)) {
-			NeckCapRenderer.render(entity, matrices, consumers, light);
-		}
 		if (entity instanceof PlayerEntity player) {
 			PigSwallowEffects.renderIncoming(matrices, consumers, player, light, tickDelta);
 			if (model instanceof BipedEntityModel<?> biped) mhf$fatParts(biped, 0);
 		}
+		mhf$headShake.restore();
 		setHeadVisible(entity, true);
 		entity.deathTime = mhf$previousDeathTime;
 		entity.hurtTime = mhf$previousHurtTime;

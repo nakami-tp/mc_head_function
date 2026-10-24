@@ -8,6 +8,28 @@ import net.minecraft.sound.SoundEvents;
 
 /** Short, positional cues. Continuous actions call these at explicit, bounded intervals. */
 public final class HeadSounds {
+	public static final SoundEvent PUNCH_ONE = register("beheading.punch_one");
+	public static final SoundEvent PUNCH_TWO = register("beheading.punch_two");
+	public static final SoundEvent PUNCH_FINISH = register("beheading.punch_finish");
+
+	private static SoundEvent register(String path) {
+		var id = com.nakami.mcheadfunction.McHeadFunction.id(path);
+		return net.minecraft.registry.Registry.register(net.minecraft.registry.Registries.SOUND_EVENT, id, SoundEvent.of(id));
+	}
+
+	public static void register() { }
+
+	/** One impact per accepted punch, including the finisher; no overlapping weak-hit cue. */
+	public static void punch(Entity target, int hit) {
+		SoundEvent sound = switch (hit) {
+			case 1 -> PUNCH_ONE;
+			case 2 -> PUNCH_TWO;
+			case 3 -> PUNCH_FINISH;
+			default -> throw new IllegalArgumentException("Invalid punch: " + hit);
+		};
+		play(target, sound, hit == 3 ? 1.0F : 0.85F, 1.0F);
+	}
+
 	private HeadSounds() {
 	}
 

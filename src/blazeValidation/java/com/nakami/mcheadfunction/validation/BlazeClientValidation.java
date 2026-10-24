@@ -27,6 +27,10 @@ public final class BlazeClientValidation implements ClientModInitializer {
 	private volatile String failure;
 	private volatile int targetId;
 	private volatile int interruptionTarget;
+	public static boolean sideView;
+	private net.minecraft.client.particle.Particle movingFlame;
+	private double movingZ;
+	private int pendingScreenshots;
 	private int tick, highFrames, coolingFrames, readySounds, waveSounds;
 	private final long started = System.nanoTime();
 	@Override public void onInitializeClient() { ClientTickEvents.END_CLIENT_TICK.register(this::tick); }
@@ -135,9 +139,108 @@ public final class BlazeClientValidation implements ClientModInitializer {
 			if (tick == 380) ClientPlayNetworking.send(new HeadSkillC2SPayload(false));
 			if (tick == 395) {
 				checkQuietTarget(c, "water");
-				finish(c, "PASS highFrames=" + highFrames + " coolingFrames=" + coolingFrames + " readySounds=" + readySounds + " waveSounds=" + waveSounds + " spectator/water cancelled");
 			}
+			visualScenario(c);
 		} catch (Throwable e) { finish(c, "FAIL " + e); }
+	}
+	private void visualScenario(MinecraftClient c) throws Exception {
+		if (tick >= 400) {
+			// Mouse motion while this isolated window loses focus must not aim the collision fixture at the floor.
+			c.player.setYaw(0); c.player.prevYaw = 0; c.player.setPitch(0); c.player.prevPitch = 0;
+			c.player.setHeadYaw(0); c.player.prevHeadYaw = 0; c.player.setBodyYaw(0); c.player.prevBodyYaw = 0;
+		}
+		if (tick == 400) server(c, () -> {
+			var w = c.getServer().getOverworld();
+			for (int x = 20; x <= 38; x++) for (int z = -5; z <= 15; z++)
+				w.setBlockState(new BlockPos(x, 99, z), Blocks.DEEPSLATE_TILES.getDefaultState());
+			var p = c.getServer().getPlayerManager().getPlayerList().getFirst();
+			p.teleport(w, 25.5, 100, 0.5, 0, 0);
+		});
+		if (tick == 420) {
+			sideView = true;
+			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			c.options.hudHidden = true;
+		}
+		if (tick == 425) ClientPlayNetworking.send(new HeadSkillC2SPayload(true));
+		if (tick == 430) capture(c, "07-side-start.png");
+		if (tick == 440) {
+			var flames = flames(c);
+			check(flames.size() >= 12, "network pulse did not create a visible stream: " + flames.size());
+			check(flames.stream().allMatch(p -> p.getBoundingBox().getCenter().z <= 6.501), "flame exceeded six-block range");
+			movingFlame = flames.stream().filter(p -> p.getBoundingBox().getCenter().z < 3).findFirst().orElseThrow();
+			movingZ = movingFlame.getBoundingBox().getCenter().z;
+		}
+		if (tick == 442) check(movingFlame.getBoundingBox().getCenter().z > movingZ + 0.3, "flame did not travel forwards");
+		if (tick == 450) capture(c, "08-side-stream.png");
+		if (tick == 470) { check(HeadHud.status.blazeHeat() >= 40, "side high heat missing"); capture(c, "09-side-high.png"); }
+		if (tick >= 425 && tick < 495) capture(c, String.format("motion-%03d.png", tick - 425));
+		if (tick == 474) ClientPlayNetworking.send(new HeadSkillC2SPayload(false));
+		if (tick == 477 || tick == 480 || tick == 484) capture(c, "10-side-wave-" + tick + ".png");
+		if (tick == 500) {
+			check(flames(c).isEmpty(), "flames survived release beyond their lifetime");
+			sideView = false; c.options.hudHidden = false;
+			c.options.setPerspective(Perspective.FIRST_PERSON);
+			c.options.getParticles().setValue(net.minecraft.client.option.ParticlesMode.MINIMAL);
+		}
+		if (tick == 505) ClientPlayNetworking.send(new HeadSkillC2SPayload(true));
+		if (tick == 535) { check(flames(c).size() >= 4, "minimal particles lost the core flame"); capture(c, "11-first-minimal.png"); }
+		if (tick == 550) capture(c, "12-first-high.png");
+		if (tick == 555) ClientPlayNetworking.send(new HeadSkillC2SPayload(false));
+		if (tick == 580) check(flames(c).isEmpty(), "minimal flame did not expire");
+		if (tick == 590) {
+			c.options.getParticles().setValue(net.minecraft.client.option.ParticlesMode.ALL);
+			sideView = true; c.options.hudHidden = true;
+			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			server(c, () -> {
+				var w = c.getServer().getOverworld();
+				for (int x = 23; x <= 28; x++) for (int y = 100; y <= 104; y++)
+					w.setBlockState(new BlockPos(x, y, 3), Blocks.GLASS.getDefaultState());
+			});
+		}
+		if (tick == 600) ClientPlayNetworking.send(new HeadSkillC2SPayload(true));
+		if (tick >= 610 && tick <= 620) {
+			check(!flames(c).isEmpty(), "wall test has no flame");
+			check(flames(c).stream().anyMatch(p -> p.getBoundingBox().getCenter().z > 2.2), "flame did not reach wall approach");
+			check(flames(c).stream().allMatch(p -> p.getBoundingBox().getCenter().z < 3.001), "flame tunneled through wall");
+		}
+		if (tick == 615) capture(c, "13-wall-impact.png");
+		if (tick == 625) ClientPlayNetworking.send(new HeadSkillC2SPayload(false));
+		if (tick == 665) {
+			check(flames(c).isEmpty(), "wall flame kept emitting after low-heat release");
+			server(c, () -> {
+				var w = c.getServer().getOverworld();
+				// Sample fresh water before it flows back to the shooter and cancels the ability.
+				for (int x = 23; x <= 28; x++) for (int y = 100; y <= 104; y++)
+					w.setBlockState(new BlockPos(x, y, 3), Blocks.WATER.getDefaultState());
+			});
+		}
+		if (tick == 666) ClientPlayNetworking.send(new HeadSkillC2SPayload(true));
+		if (tick >= 670 && tick <= 674) {
+			check(!c.player.isTouchingWater(), "water fixture reached shooter before collision sample");
+			check(!flames(c).isEmpty(), "water test has no flame");
+			check(flames(c).stream().allMatch(p -> p.getBoundingBox().getCenter().z < 3.001), "flame crossed water surface");
+		}
+		if (tick == 672) capture(c, "14-water-impact.png");
+		if (tick == 675) ClientPlayNetworking.send(new HeadSkillC2SPayload(false));
+		if (tick == 710) {
+			check(flames(c).isEmpty(), "water flame kept emitting");
+			check(pendingScreenshots == 0, "screenshots not saved");
+			finish(c, "PASS highFrames=" + highFrames + " coolingFrames=" + coolingFrames + " readySounds=" + readySounds
+				+ " waveSounds=" + waveSounds + " spectator/water cancelled; moving flames, release lifetime, minimal particles, wall/water collision");
+		}
+	}
+	/** Inspect actual particles queued by the normal S2C receiver, only in this development test mod. */
+	private static java.util.List<net.minecraft.client.particle.Particle> flames(MinecraftClient c) throws Exception {
+		var field = net.minecraft.client.particle.ParticleManager.class.getDeclaredField("particles");
+		field.setAccessible(true);
+		var result = new java.util.ArrayList<net.minecraft.client.particle.Particle>();
+		for (Object queue : ((java.util.Map<?, ?>)field.get(c.particleManager)).values()) {
+			for (Object value : (java.util.Queue<?>)queue) {
+				if (value instanceof net.minecraft.client.particle.Particle particle && particle.isAlive()
+					&& particle.getClass().getName().endsWith("BlazeBreathEffects$Flame")) result.add(particle);
+			}
+		}
+		return result;
 	}
 	private void spawnInterruptionTarget(MinecraftClient c) {
 		server(c, () -> {
@@ -155,7 +258,16 @@ public final class BlazeClientValidation implements ClientModInitializer {
 
 	private void server(MinecraftClient c, Runnable r) { c.getServer().execute(() -> { try { r.run(); } catch (Throwable e) { failure = e.toString(); } }); }
 	private static void check(boolean ok, String message) { if (!ok) throw new IllegalStateException(message); }
-	private static void capture(MinecraftClient c, String name) { ScreenshotRecorder.saveScreenshot(c.runDirectory, name, c.getFramebuffer(), message -> {}); }
+	private void capture(MinecraftClient c, String name) {
+		pendingScreenshots++;
+		ScreenshotRecorder.saveScreenshot(c.runDirectory, name, c.getFramebuffer(), message -> c.execute(() -> {
+			pendingScreenshots--;
+			try {
+				Path path = c.runDirectory.toPath().resolve("screenshots").resolve(name);
+				check(Files.isRegularFile(path) && Files.size(path) > 0, "missing screenshot " + name);
+			} catch (Exception e) { failure = e.toString(); }
+		}));
+	}
 	private void finish(MinecraftClient c, String message) {
 		finished = true; System.out.println("[BLAZE-VALIDATION] " + message);
 		try { Files.writeString(Path.of("result.txt"), message + "\n"); } catch (Exception e) { throw new RuntimeException(e); }

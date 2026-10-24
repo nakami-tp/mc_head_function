@@ -1,0 +1,4 @@
+allprojects { p ->
+    p.layout.buildDirectory.set(p.file('build/head-film'))
+    p.afterEvaluate { p.apply from: p.file('tools/head-film/film.gradle') }
+}

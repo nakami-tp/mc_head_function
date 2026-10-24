@@ -4,6 +4,9 @@ import com.nakami.mcheadfunction.McHeadFunction;
 import com.nakami.mcheadfunction.head.*;
 import com.nakami.mcheadfunction.progression.HeadMastery;
 import com.nakami.mcheadfunction.wear.GoatCharge;
+import com.nakami.mcheadfunction.net.BlazeFlameS2CPayload;
+import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import java.util.*;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
@@ -94,19 +97,11 @@ public final class BlazeFire {
 				if (inCone(eye, look, center, range(p), 0.22) && visible(w, p, eye, center)) burn(w, p, target, 2);
 			}
 		}
-		if (p.age % 2 == 0) {
-			Vec3d side = look.crossProduct(new Vec3d(0, 1, 0)).normalize();
-			if (side.lengthSquared() < 0.01) side = new Vec3d(1, 0, 0);
-			// Start below eye height and beyond the camera, keeping the reticle readable.
-			Vec3d mouth = eye.add(0, -0.45, 0).add(look.multiply(1.35));
-			if (!visible(w, p, eye, mouth)) return;
-			for (int lane = -1; lane <= 1; lane++) {
-				Vec3d end = eye.add(look.multiply(range(p))).add(side.multiply(lane * range(p) * 0.16));
-				var hit = ray(w, p, mouth, end);
-				HeadEffects.line(w, mouth, hit.getPos(), ParticleTypes.SMALL_FLAME);
-			}
-		}
+		emit(w, new BlazeFlameS2CPayload(p.getId(), eye, look, (float) range(p), PlayerHeadAccess.state(p).blazeHeat, false));
 		if (p.age % 15 == 0) HeadSounds.play(p, SoundEvents.ENTITY_BLAZE_SHOOT, 0.25F, 0.8F);
+	}
+	private static void emit(ServerWorld world, BlazeFlameS2CPayload pulse) {
+		for (var viewer : PlayerLookup.around(world, pulse.origin(), 48)) ServerPlayNetworking.send(viewer, pulse);
 	}
 	/** Called with the swept projectile segment, clamped to the first wall and 16-block range. */
 	public static void trail(ServerWorld w, ServerPlayerEntity owner, Vec3d start, Vec3d end) {
@@ -185,7 +180,7 @@ public final class BlazeFire {
 			for (Front front : due) {
 				Vec3d c = front.center;
 				if (!w.isChunkLoaded(BlockPos.ofFloored(c)) || !w.getFluidState(BlockPos.ofFloored(c)).isEmpty()) continue;
-				for (int y = 0; y < 5; y++) w.spawnParticles(ParticleTypes.FLAME, c.x, c.y + y * 0.28, c.z, 3, 0.26, 0.08, 0.26, 0.015);
+				emit(w, new BlazeFlameS2CPayload(owner.getId(), c, new Vec3d(0, 1, 0), 1.4F, HIGH_HEAT, true));
 				for (var target : w.getEntitiesByClass(LivingEntity.class, new Box(c.x - 0.65, c.y - 0.4, c.z - 0.65, c.x + 0.65, c.y + 1.5, c.z + 0.65), e -> e != owner && e.isAlive())) {
 					if (!wave.hit.contains(target.getUuid()) && visible(w, owner, c.add(0, 0.1, 0), target.getBoundingBox().getCenter())) {
 						wave.hit.add(target.getUuid());

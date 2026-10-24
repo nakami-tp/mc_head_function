@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"beheading_client_validation","version":"1.0.0","environment":"client","entrypoints":{"client":["com.nakami.mcheadfunction.validation.BeheadingClientValidation"]},"mixins":["beheading-validation.mixins.json"],"depends":{"mc_head_function":"*","fabric-api":"*"}}
