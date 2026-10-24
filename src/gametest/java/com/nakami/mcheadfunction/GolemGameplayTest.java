@@ -37,6 +37,7 @@ public class GolemGameplayTest implements FabricGameTest {
 		var head = new ThrownHeadEntity(world, owner, HeadType.IRON_GOLEM, HeadType.ThrowStyle.GOLEM_ROLL);
 		head.setPosition(origin.getX(), origin.getY(), origin.getZ());
 		head.setVelocity(0, 0, 1);
+		activateRoller(head);
 		world.spawnEntity(head);
 		float[] initial = {100};
 		context.waitAndRun(5, () -> {
@@ -66,7 +67,7 @@ public class GolemGameplayTest implements FabricGameTest {
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 50)
+	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 50, batchId = "golem_wall")
 	public void unbreakableWallStopsRollerAndKnockedOffHeadStaysSmall(TestContext context) {
 		var world = context.getWorld();
 		var origin = context.getAbsolutePos(new BlockPos(5, 80, 5));
@@ -78,6 +79,7 @@ public class GolemGameplayTest implements FabricGameTest {
 		var head = new ThrownHeadEntity(world, owner, HeadType.IRON_GOLEM, HeadType.ThrowStyle.GOLEM_ROLL);
 		head.setPosition(origin.getX(), origin.getY(), origin.getZ());
 		head.setVelocity(0, 0, 1);
+		activateRoller(head);
 		world.spawnEntity(head);
 		var knocked = new ThrownHeadEntity(world, owner, HeadType.IRON_GOLEM, HeadType.ThrowStyle.KNOCK_OFF);
 		knocked.setPosition(origin.getX(), origin.getY() + 8, origin.getZ());
@@ -93,28 +95,53 @@ public class GolemGameplayTest implements FabricGameTest {
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 10)
-	public void throwStartsAheadEvenWhenLookingDown(TestContext context) {
-		var player = context.createMockCreativeServerPlayerInWorld();
+	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 320, batchId = "golem_throw")
+	public void throwFliesSmallThenFallsVerticallyAndRolls(TestContext context) {
+		var world = context.getWorld();
 		var origin = context.getAbsolutePos(new BlockPos(5, 100, 5));
-		player.refreshPositionAndAngles(origin.getX(), origin.getY(), origin.getZ(), 45, 90);
-		player.setHeadYaw(45);
+		for (int x = -5; x <= 5; x++) for (int z = -5; z <= 70; z++)
+			world.setBlockState(origin.add(x, -1, z), Blocks.BEDROCK.getDefaultState());
+		for (int z = -1; z <= 5; z++) world.setChunkForced(origin.getX() >> 4, (origin.getZ() >> 4) + z, true);
+		var player = context.createMockCreativeServerPlayerInWorld();
+		player.refreshPositionAndAngles(origin.getX(), origin.getY(), origin.getZ(), 0, 0);
 		player.setStackInHand(net.minecraft.util.Hand.MAIN_HAND,
 			com.nakami.mcheadfunction.head.HeadItems.item(HeadType.IRON_GOLEM).getDefaultStack());
 		com.nakami.mcheadfunction.throwing.ThrowHandler.throwHeldHead(player);
-		var head = context.getWorld().getEntitiesByClass(ThrownHeadEntity.class, player.getBoundingBox().expand(8),
+		var head = world.getEntitiesByClass(ThrownHeadEntity.class, player.getBoundingBox().expand(8),
 			e -> e.getOwner() == player).getFirst();
-		context.assertTrue(Math.abs(head.getPos().subtract(player.getPos()).horizontalLength() - 4.5) < 0.01,
-			"Throw must spawn ahead even with vertical aim");
-		context.waitAndRun(2, () -> {
-			context.assertFalse(head.getBoundingBox().intersects(player.getBoundingBox()), "Expanded head must not contain player");
-			context.assertTrue(ThrownHeadEntity.GOLEM_SCALE == 8, "Head scale must be eight");
-			head.discard();
+		context.assertTrue(head.getPos().subtract(player.getPos()).horizontalLength() < 1,
+			"Small head must launch from the player, not appear ahead as a roller");
+		context.assertTrue(!head.isActive() && head.getWidth() == 0.5F, "Throw starts at original size");
+		var sky = new net.minecraft.util.math.Vec3d[1];
+		boolean[] landed = {false};
+		for (int tick = 1; tick <= 300; tick++) {
+			context.waitAndRun(tick, () -> {
+				if (!head.isActive() || head.isRemoved()) return;
+				if (sky[0] == null) {
+					sky[0] = head.getPos();
+					context.assertTrue(head.getY() > origin.getY() + 10, "Giant head appears high above impact");
+					context.assertTrue(head.getZ() > origin.getZ() + 5, "Impact follows the thrown projectile");
+				}
+				if (!landed[0]) {
+					context.assertTrue(head.getPos().subtract(sky[0]).horizontalLength() < 0.01,
+						"Initial giant descent must stay above the impact point");
+					context.assertTrue(head.getRollDistance(1) == 0, "Head must not roll before landing");
+					landed[0] = head.isOnGround();
+				}
+			});
+		}
+		context.waitAndRun(305, () -> {
+			context.assertTrue(sky[0] != null && landed[0] && head.isRemoved(), "Full throw, descent, roll and recycle must complete");
+			context.assertTrue(Math.abs(head.getZ() - sky[0].z - 40) < 0.3, "Roll forty blocks in the throw direction after landing");
+			context.assertTrue(world.getEntitiesByClass(com.nakami.mcheadfunction.entity.RecycledHeadItemEntity.class,
+				head.getBoundingBox().expand(3), e -> com.nakami.mcheadfunction.head.HeadItems.ofStack(e.getStack()) == HeadType.IRON_GOLEM).size() == 1,
+				"One throw must return exactly one head: head=" + head.getPos() + " items=" + world.getEntitiesByClass(net.minecraft.entity.ItemEntity.class, head.getBoundingBox().expand(100), e -> true).stream().map(e -> e.getPos() + ":" + e.getStack()).toList());
+			for (int z = -1; z <= 5; z++) world.setChunkForced(origin.getX() >> 4, (origin.getZ() >> 4) + z, false);
 			context.complete();
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 100)
+	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 100, batchId = "golem_slope")
 	public void descentAcceleratesAndKeepsMomentumAfterReload(TestContext context) {
 		var world = context.getWorld();
 		var origin = context.getAbsolutePos(new BlockPos(5, 140, 5));
@@ -126,6 +153,7 @@ public class GolemGameplayTest implements FabricGameTest {
 		var head = new ThrownHeadEntity(world, context.createMockCreativeServerPlayerInWorld(), HeadType.IRON_GOLEM, HeadType.ThrowStyle.GOLEM_ROLL);
 		head.setPosition(origin.getX(), origin.getY(), origin.getZ());
 		head.setVelocity(0, 0, 1);
+		activateRoller(head);
 		world.spawnEntity(head);
 		context.waitAndRun(65, () -> {
 			context.assertTrue(head.getY() < origin.getY() - 1 && head.getVelocity().horizontalLength() > 0.25,
@@ -145,7 +173,7 @@ public class GolemGameplayTest implements FabricGameTest {
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 110)
+	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 110, batchId = "golem_crater")
 	public void highLandingMakesBoundedCraterButSmallDropsDoNot(TestContext context) {
 		var world = context.getWorld();
 		var origin = context.getAbsolutePos(new BlockPos(5, 200, 5));
@@ -156,6 +184,7 @@ public class GolemGameplayTest implements FabricGameTest {
 		var small = new ThrownHeadEntity(world, owner, HeadType.IRON_GOLEM, HeadType.ThrowStyle.GOLEM_ROLL);
 		small.setPosition(origin.getX(), origin.getY() + 1, origin.getZ());
 		small.setVelocity(0, 0, 1);
+		activateRoller(small);
 		world.spawnEntity(small);
 		context.waitAndRun(15, () -> {
 			context.assertTrue(world.getBlockState(origin.add(0, -1, 2)).isOf(Blocks.STONE), "Ordinary drop must not excavate ground");
@@ -163,6 +192,7 @@ public class GolemGameplayTest implements FabricGameTest {
 			var high = new ThrownHeadEntity(world, owner, HeadType.IRON_GOLEM, HeadType.ThrowStyle.GOLEM_ROLL);
 			high.setPosition(origin.getX(), origin.getY() + 14, origin.getZ());
 			high.setVelocity(0, 0, 1);
+			activateRoller(high);
 			world.spawnEntity(high);
 			context.waitAndRun(55, () -> {
 				int holes = 0, deep = 0;
@@ -179,7 +209,7 @@ public class GolemGameplayTest implements FabricGameTest {
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 560)
+	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 560, batchId = "golem_longfall")
 	public void longFreeFallPreservesGroundRollingBudget(TestContext context) {
 		var world = context.getWorld();
 		var origin = context.getAbsolutePos(new BlockPos(5, 260, 5));
@@ -205,7 +235,7 @@ public class GolemGameplayTest implements FabricGameTest {
 				"Airborne time and drift must not spend any ground rolling budget");
 		});
 		context.waitAndRun(340, () -> {
-			context.assertTrue(!head.isRemoved() && head.isOnGround(), "Head must land and continue rolling after a long fall");
+			context.assertTrue(!head.isRemoved() && head.isOnGround(), "Head must land and continue rolling after a long fall: " + head.getPos() + " removed=" + head.isRemoved() + " origin=" + origin);
 			var data = new net.minecraft.nbt.NbtCompound();
 			head.writeNbt(data);
 			context.assertTrue(data.getDouble("rollTraveled") > 2 && data.getDouble("rollTraveled") < 30, "Only post-landing travel is counted");
@@ -219,4 +249,15 @@ public class GolemGameplayTest implements FabricGameTest {
 			context.complete();
 		});
 	}
+	private static void activateRoller(ThrownHeadEntity head) {
+		var state = new net.minecraft.nbt.NbtCompound();
+		head.writeNbt(state);
+		state.putBoolean("active", true);
+		state.putBoolean("rolledOnGround", true);
+		var direction = head.getVelocity().multiply(1, 0, 1).normalize();
+		state.putDouble("rollX", direction.x);
+		state.putDouble("rollZ", direction.z);
+		head.readNbt(state);
+	}
+
 }

@@ -25,7 +25,20 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(PlayerEntity.class)
-public abstract class PlayerEntityMixin implements PlayerHeadAccess, PigStuffedAccess {
+public abstract class PlayerEntityMixin implements PlayerHeadAccess, PigStuffedAccess, com.nakami.mcheadfunction.head.GlovePunchAccess {
+	@Unique private static final TrackedData<Integer> MHF_GLOVE_PUNCH = DataTracker.registerData(PlayerEntity.class, TrackedDataHandlerRegistry.INTEGER);
+	@Unique private static final TrackedData<Long> MHF_GLOVE_PUNCH_AT = DataTracker.registerData(PlayerEntity.class, TrackedDataHandlerRegistry.LONG);
+	@Override public int mhf$glovePunchStage() {
+		PlayerEntity self = (PlayerEntity) (Object) this;
+		long age = self.getWorld().getTime() - self.getDataTracker().get(MHF_GLOVE_PUNCH_AT);
+		return age >= 0 && age < 10 ? self.getDataTracker().get(MHF_GLOVE_PUNCH) : 1;
+	}
+	@Override public void mhf$glovePunch(int stage) {
+		PlayerEntity self = (PlayerEntity) (Object) this;
+		self.getDataTracker().set(MHF_GLOVE_PUNCH, stage);
+		self.getDataTracker().set(MHF_GLOVE_PUNCH_AT, self.getWorld().getTime());
+	}
+
 	@Unique
 	private static final TrackedData<Integer> MHF_STUFFED = DataTracker.registerData(PlayerEntity.class, TrackedDataHandlerRegistry.INTEGER);
 
@@ -50,6 +63,8 @@ public abstract class PlayerEntityMixin implements PlayerHeadAccess, PigStuffedA
 	@Inject(method = "initDataTracker", at = @At("RETURN"))
 	private void mhf$stuffed(DataTracker.Builder builder, CallbackInfo ci) {
 		builder.add(MHF_STUFFED, 0);
+		builder.add(MHF_GLOVE_PUNCH, 1);
+		builder.add(MHF_GLOVE_PUNCH_AT, -100L);
 	}
 
 	@Inject(method = "writeCustomDataToNbt", at = @At("RETURN"))

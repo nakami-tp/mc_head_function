@@ -8,11 +8,13 @@ import com.nakami.mcheadfunction.rule.BeheadingTracker;
 import com.nakami.mcheadfunction.rule.HeadRules;
 import com.nakami.mcheadfunction.throwing.ThrowHandler;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.EquipmentSlot;
+import com.nakami.mcheadfunction.head.HeadItems;
+import com.nakami.mcheadfunction.head.HeadShakeAccess;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
@@ -25,20 +27,24 @@ public final class BeheadingHandler {
 	}
 
 	public static boolean tryShake(PlayerEntity player, LivingEntity target) {
-		if (player.getWorld().isClient() || !player.getMainHandStack().isEmpty()) {
+		if (player.getWorld().isClient() || !shouldCancelMelee(player, target)) {
 			return false;
 		}
-		if (!HeadLookups.canBehead(target) || !aimingAtHead(player, target)) {
-			return false;
+		player.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+		((HeadShakeAccess) target).mhf$setHeadShakeTicks(HeadShakeAccess.DURATION);
+		int hit = TRACKER.registerHit(player.getUuid(), target.getUuid(), player.getWorld().getTime() * 50L);
+		if (player.getMainHandStack().isOf(HeadItems.BEHEADING_GLOVE)) {
+			((com.nakami.mcheadfunction.head.GlovePunchAccess) player).mhf$glovePunch(hit);
 		}
-		player.swingHand(player.getActiveHand());
+		HeadSounds.punch(target, hit);
 		if (player.getWorld() instanceof ServerWorld world) {
-			HeadSounds.play(target, SoundEvents.ENTITY_PLAYER_ATTACK_WEAK, 0.45F, 1.15F);
 			world.spawnParticles(ParticleTypes.CRIT, target.getX(), target.getEyeY(), target.getZ(), 6, 0.15, 0.15, 0.15, 0.02);
 		}
-		boolean done = TRACKER.registerHit(player.getUuid(), target.getUuid(), player.getWorld().getTime() * 50L);
-		if (done) {
+		if (hit == HeadRules.SHAKE_HITS) {
 			behead(player, target);
+			if (player.getMainHandStack().isOf(HeadItems.BEHEADING_GLOVE)) {
+				player.getMainHandStack().damage(1, player, EquipmentSlot.MAINHAND);
+			}
 		}
 		return true;
 	}
@@ -49,8 +55,8 @@ public final class BeheadingHandler {
 			return;
 		}
 		HeadlessAccess.setHeadless(target, true);
-		ThrowHandler.knockOff(player, type);
-		HeadSounds.play(target, SoundEvents.ENTITY_PLAYER_ATTACK_STRONG, 0.55F, 0.85F);
+		((HeadShakeAccess) target).mhf$setHeadShakeTicks(0);
+		ThrowHandler.knockOff(player, target, type);
 	}
 
 	public static boolean aimingAtHead(PlayerEntity player, LivingEntity target) {
@@ -69,7 +75,13 @@ public final class BeheadingHandler {
 	}
 
 	public static boolean shouldCancelMelee(PlayerEntity player, LivingEntity target) {
-		return player.getMainHandStack().isEmpty() && HeadLookups.canBehead(target) && aimingAtHead(player, target);
+		if (!target.isAlive() || !HeadLookups.canBehead(target)) return false;
+		if (player.getMainHandStack().isOf(HeadItems.BEHEADING_GLOVE)) {
+			// Vanilla already selects the entity under the crosshair. Keep range and line-of-sight
+			// validation here too, so server-side callers cannot punch through walls or at a distance.
+			return player.canInteractWithEntity(target, 0) && player.canSee(target);
+		}
+		return player.getMainHandStack().isEmpty() && aimingAtHead(player, target);
 	}
 
 	public static boolean holdingHead(ItemStack stack) {

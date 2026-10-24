@@ -6,6 +6,7 @@
   "entrypoints": {
     "fabric-gametest": [
       "com.nakami.mcheadfunction.HeadGameplayTest",
+      "com.nakami.mcheadfunction.BeheadingGameplayTest",
       "com.nakami.mcheadfunction.HeadDepthTest",
       "com.nakami.mcheadfunction.CreeperGameplayTest",
       "com.nakami.mcheadfunction.BlazeGameplayTest",

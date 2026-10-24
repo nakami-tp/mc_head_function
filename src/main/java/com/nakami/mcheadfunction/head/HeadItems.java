@@ -14,6 +14,8 @@ import net.minecraft.registry.Registry;
 import net.minecraft.text.Text;
 
 public final class HeadItems {
+	public static final Item BEHEADING_GLOVE = Registry.register(Registries.ITEM, McHeadFunction.id("beheading_glove"),
+		new com.nakami.mcheadfunction.behead.BeheadingGloveItem());
 	private static final Map<HeadType, Item> ITEMS = new EnumMap<>(HeadType.class);
 	private static final Map<Item, HeadType> BY_ITEM = new HashMap<>();
 
@@ -39,6 +41,7 @@ public final class HeadItems {
 			.displayName(Text.translatable("itemGroup.mc_head_function.heads"))
 			.icon(() -> new ItemStack(Items.ZOMBIE_HEAD))
 			.entries((context, entries) -> {
+				entries.add(BEHEADING_GLOVE);
 				for (HeadType type : HeadType.values()) {
 					entries.add(item(type));
 				}

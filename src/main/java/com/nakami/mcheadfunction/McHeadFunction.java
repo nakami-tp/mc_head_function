@@ -1,6 +1,5 @@
 package com.nakami.mcheadfunction;
 
-import com.nakami.mcheadfunction.behead.HeadlessHandler;
 import com.nakami.mcheadfunction.entity.ModEntities;
 import com.nakami.mcheadfunction.head.HeadItems;
 import com.nakami.mcheadfunction.net.ModNetworking;
@@ -19,6 +18,7 @@ public class McHeadFunction implements ModInitializer {
 	public void onInitialize() {
 		com.nakami.mcheadfunction.haunt.HauntBlocks.register();
 		HeadItems.register();
+		com.nakami.mcheadfunction.head.HeadSounds.register();
 		com.nakami.mcheadfunction.haunt.HauntCommand.register();
 		com.nakami.mcheadfunction.haunt.HauntTownResidents.register();
 		ModEntities.register();
@@ -28,7 +28,6 @@ public class McHeadFunction implements ModInitializer {
 		com.nakami.mcheadfunction.blaze.BlazeFire.register();
 		com.nakami.mcheadfunction.wear.GoatCharge.register();
 		com.nakami.mcheadfunction.progression.HeadMastery.register();
-		HeadlessHandler.register();
 		PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) -> !HeadItems.isHead(player.getMainHandStack()));
 		LOGGER.info("Mc Head Function initialized");
 	}

@@ -1,0 +1,26 @@
+{
+  "beheading.punch_one": {
+    "subtitle": "subtitles.mc_head_function.punch_one",
+    "sounds": [
+      {
+        "name": "mc_head_function:beheading/punch_1"
+      }
+    ]
+  },
+  "beheading.punch_two": {
+    "subtitle": "subtitles.mc_head_function.punch_two",
+    "sounds": [
+      {
+        "name": "mc_head_function:beheading/punch_2"
+      }
+    ]
+  },
+  "beheading.punch_finish": {
+    "subtitle": "subtitles.mc_head_function.punch_finish",
+    "sounds": [
+      {
+        "name": "mc_head_function:beheading/punch_3"
+      }
+    ]
+  }
+}

@@ -32,7 +32,7 @@
   "head.mc_head_function.blaze_head.wear": "Hold %s to breathe fire and build heat · Release when hot for a fire wave · Overheating stops fire · Fire immunity",
   "head.mc_head_function.blaze_head.throw": "Attack to throw: 6-second fire trail; your fire wave travels along it",
   "head.mc_head_function.iron_golem_head.wear": "More armor, damage and knockback",
-  "head.mc_head_function.iron_golem_head.throw": "Attack to throw: 8x iron roller accelerates downhill and craters the ground on heavy landings",
+  "head.mc_head_function.iron_golem_head.throw": "Attack to throw: a small head marks impact, then an 8x head falls from above and rolls forward",
   "head.mc_head_function.goat_head.wear": "%s: charge / stop · locked view, strafe keys steer · launch targets, stun on landing · break blocks by hardness",
   "head.mc_head_function.goat_head.throw": "Attack to throw: Ram and launch a target",
   "head.mc_head_function.pig_head.wear": "Food restores extra saturation",
@@ -166,5 +166,10 @@
   "haunt.mc_head_function.count_set": "%s possession count set to %s",
   "haunt.mc_head_function.town_built": "Haunted town built",
   "haunt.mc_head_function.town_reset": "Haunted town rebuilt",
-  "haunt.mc_head_function.tree_filled": "The tree is hung"
+  "haunt.mc_head_function.tree_filled": "The tree is hung",
+  "item.mc_head_function.beheading_glove": "Beheading Glove",
+  "item.mc_head_function.beheading_glove.hint": "Main hand: land 3 punches anywhere within 2 seconds to knock off a head without damage. Costs 1 durability per head.",
+  "subtitles.mc_head_function.punch_one": "Glove punches",
+  "subtitles.mc_head_function.punch_two": "Glove thumps",
+  "subtitles.mc_head_function.punch_finish": "Head knocked off"
 }

@@ -16,7 +16,9 @@
 		"RabbitAirMovementMixin",
 		"GoatCameraMixin",
 		"GoatLookMixin",
-		"GoatInputMixin"
+		"GoatInputMixin",
+		"GloveArmRendererMixin",
+		"GloveHeldFeatureMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

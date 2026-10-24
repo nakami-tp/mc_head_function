@@ -305,8 +305,11 @@ public class HeadGameplayTest implements FabricGameTest {
 	@GameTest(templateName = EMPTY_STRUCTURE)
 	public void knockedOffHeadsKeepTheirItem(TestContext context) {
 		var player = context.createMockCreativeServerPlayerInWorld();
+		var victim = context.spawnMob(EntityType.COW, 2, 1, 3);
+		victim.setAiDisabled(true);
+		player.refreshPositionAndAngles(victim.getX(), victim.getY(), victim.getZ() - 2, 0, 0);
 		for (HeadType type : HeadType.values()) {
-			ThrowHandler.knockOff(player, type);
+			ThrowHandler.knockOff(player, victim, type);
 			var heads = context.getWorld().getEntitiesByClass(ThrownHeadEntity.class,
 				player.getBoundingBox().expand(4), head -> head.getHeadType() == type);
 			context.assertTrue(heads.size() == 1, "Knocking off " + type + " must spawn one head");

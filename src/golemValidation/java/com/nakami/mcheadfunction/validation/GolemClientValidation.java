@@ -1,5 +1,9 @@
 package com.nakami.mcheadfunction.validation;
 
+import com.nakami.mcheadfunction.entity.ThrownHeadEntity;
+import com.nakami.mcheadfunction.head.HeadCrushAccess;
+import com.nakami.mcheadfunction.head.HeadItems;
+import com.nakami.mcheadfunction.head.HeadType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import net.fabricmc.api.ClientModInitializer;
@@ -10,6 +14,7 @@ import net.minecraft.client.util.ScreenshotRecorder;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.resource.DataConfiguration;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.GameMode;
 import net.minecraft.world.GameRules;
@@ -17,18 +22,23 @@ import net.minecraft.world.gen.GeneratorOptions;
 import net.minecraft.world.gen.WorldPresets;
 import net.minecraft.world.level.LevelInfo;
 
-/** Real throw path, replicated roller size, repeated damage and squash recovery. */
+/** Real held-head throw: small flight, vertical giant descent, impact, rolling and recovery. */
 public final class GolemClientValidation implements ClientModInitializer {
+	private static String renderFailure;
+	private static int rollSamples;
+	private static final float[] THROW_YAWS = {-45, 0, 45, 90, 135, 180, -135, -90};
+	private int scenario;
+	public static void recordRollAlignment(float alignment) {
+		rollSamples++;
+		if (!(alignment > 0.98F)) renderFailure = "Roll rotation disagrees with travel: alignment=" + alignment;
+	}
 	private boolean opening, setup, finished;
 	private volatile boolean ready;
 	private volatile String failure;
-	private volatile int bombId = -1;
-	private int tick, frames;
-	private volatile int victimId;
-	private float firstHealth;
-	private boolean quakeSeen, cameraMoved, slopeAccelerated;
-	private int quakeTick;
-	private float rollAt55;
+	private volatile int headId = -1, victimId;
+	private int tick, fallFrames;
+	private boolean smallSeen, giantSeen, rollSeen, crushSeen, quakeSeen;
+	private Vec3d fallPosition;
 	private final long started = System.nanoTime();
 
 	@Override public void onInitializeClient() { ClientTickEvents.END_CLIENT_TICK.register(this::tick); }
@@ -38,6 +48,7 @@ public final class GolemClientValidation implements ClientModInitializer {
 		try {
 			check((System.nanoTime() - started) / 1_000_000_000 < 180, "Timed out");
 			check(failure == null, failure);
+			check(renderFailure == null, renderFailure);
 			if (!opening && client.currentScreen != null && client.getOverlay() == null) {
 				opening = true;
 				client.options.pauseOnLostFocus = false;
@@ -45,7 +56,7 @@ public final class GolemClientValidation implements ClientModInitializer {
 				client.options.getMaxFps().setValue(60);
 				client.options.hudHidden = true;
 				client.createIntegratedServerLoader().createAndStart("golem-" + System.currentTimeMillis(),
-					new LevelInfo("Golem regression", GameMode.CREATIVE, false, Difficulty.NORMAL, true,
+					new LevelInfo("Golem throw regression", GameMode.CREATIVE, false, Difficulty.NORMAL, true,
 						new GameRules(), DataConfiguration.SAFE_MODE), new GeneratorOptions(42, false, false),
 					registries -> registries.get(RegistryKeys.WORLD_PRESET).getOrThrow(WorldPresets.FLAT).createDimensionsRegistryHolder(), client.currentScreen);
 			}
@@ -58,72 +69,69 @@ public final class GolemClientValidation implements ClientModInitializer {
 					world.getGameRules().get(GameRules.DO_DAYLIGHT_CYCLE).set(false, client.getServer());
 					world.setTimeOfDay(6000);
 					world.setWeather(0, 100000, false, false);
-					for (int x = -8; x <= 8; x++) for (int z = -8; z <= 8; z++) world.setBlockState(new BlockPos(x, 99, z), Blocks.SMOOTH_QUARTZ.getDefaultState());
-					client.getServer().getPlayerManager().getPlayerList().getFirst().teleport(world, 2, 102, 4, 150, 25);
+					for (int x = -70; x <= 70; x++) for (int z = -70; z <= 70; z++)
+						world.setBlockState(new BlockPos(x, 99, z), Blocks.BEDROCK.getDefaultState());
+					var player = client.getServer().getPlayerManager().getPlayerList().getFirst();
+					var camera = rotate(20, 30);
+					player.teleport(world, camera.x, 113, camera.z, 130 + THROW_YAWS[scenario], 12);
+					player.getAbilities().flying = true;
+					player.sendAbilitiesUpdate();
 					ready = true;
 				});
 			}
 			if (!ready) return;
 			tick++;
 			if (tick == 40) server(client, () -> launch(client));
-			if (tick >= 55 && tick <= 75) {
-				var entity = client.world.getEntityById(bombId);
-				check(entity instanceof com.nakami.mcheadfunction.entity.ThrownHeadEntity head && head.isGiantRoller()
-					&& head.getWidth() == 5F, "Client missing eight-times roller dimensions");
-				var head = (com.nakami.mcheadfunction.entity.ThrownHeadEntity) entity;
-				var victim = (net.minecraft.entity.LivingEntity) client.world.getEntityById(victimId);
-				check(victim != null && ((com.nakami.mcheadfunction.head.HeadCrushAccess) victim).mhf$crushTicks() > 0, "Client victim not flattened");
-				if (tick == 55) { firstHealth = victim.getHealth(); rollAt55 = head.getRollDistance(1); }
-				if (tick == 75) {
-					check(victim.getHealth() < firstHealth, "Repeated damage did not reach client");
-					check(Math.abs(head.getRollDistance(1) - rollAt55 - 4) < 0.6, "Client roll phase must cover four blocks per second");
+			var entity = client.world.getEntityById(headId);
+			if (entity instanceof ThrownHeadEntity head) {
+				if (!head.isActive()) {
+					check(head.getWidth() == 0.5F, "Flying head must retain original dimensions");
+					if (!smallSeen) { smallSeen = true; capture(client, "01-small-flight"); }
+				} else {
+					check(head.isGiantRoller() && head.getWidth() == 5F, "Giant dimensions must reach client");
+					if (head.getY() > 106 && head.getRollDistance(1) == 0) {
+						if (fallPosition == null) fallPosition = head.getPos();
+						check(head.getPos().subtract(fallPosition).horizontalLength() < 0.3, "Giant must descend vertically");
+						if (++fallFrames == 5) { giantSeen = true; capture(client, "02-giant-descent"); }
+					}
+					if (!rollSeen && head.getRollDistance(1) > 3) {
+						check(head.getY() < 100.1, "Rolling starts only after landing");
+						rollSeen = true;
+						capture(client, "04-rolling");
+					}
 				}
-				frames++;
 			}
-			if (tick == 60 || tick == 100 || tick == 150) capture(client, "roller-" + tick);
-			if (tick == 200) {
-				var head = (com.nakami.mcheadfunction.entity.ThrownHeadEntity) client.world.getEntityById(bombId);
-				check(head != null && head.getRollDistance(1) > 30, "Roller must continue beyond old twenty-block range");
+			var victim = client.world.getEntityById(victimId);
+			if (victim instanceof net.minecraft.entity.LivingEntity living)
+				crushSeen |= living.getHealth() < 100 && ((HeadCrushAccess) living).mhf$crushTicks() > 0;
+			if (!quakeSeen && com.nakami.mcheadfunction.client.GolemQuake.amplitude(0) > 0) {
+				quakeSeen = true;
+				capture(client, "03-landing");
 			}
-			if (tick == 250) {
-				check(client.world.getEntityById(bombId) == null, "Roller did not finish forty-block journey");
-				var victim = (net.minecraft.entity.LivingEntity) client.world.getEntityById(victimId);
-				check(victim != null && ((com.nakami.mcheadfunction.head.HeadCrushAccess) victim).mhf$crushTicks() > 0, "Squash must remain for ten seconds after last contact");
-			}
-			if (tick == 280) {
-				var victim = (net.minecraft.entity.LivingEntity) client.world.getEntityById(victimId);
-				check(victim != null && ((com.nakami.mcheadfunction.head.HeadCrushAccess) victim).mhf$crushTicks() == 0, "Squash must recover after ten seconds");
-				server(client, () -> drop(client));
-			}
-			if (tick > 280 && tick < 410 && com.nakami.mcheadfunction.client.GolemQuake.amplitude(0) > 0) {
-				if (!quakeSeen) { quakeSeen = true; quakeTick = tick; capture(client, "landing-impact"); }
-				cameraMoved |= Math.abs(client.gameRenderer.getCamera().getPitch() - client.player.getPitch()) > 0.02;
-				if (tick == quakeTick + 4 || tick == quakeTick + 10) capture(client, "quake-" + (tick - quakeTick));
-			}
-			if (tick == 410) {
-				check(quakeSeen && cameraMoved, "Landing must deliver quake packet and move rendered camera");
-				check(com.nakami.mcheadfunction.client.GolemQuake.amplitude(0) == 0, "Quake must stop");
-				capture(client, "crater-after");
-				server(client, () -> {
-					var world = client.getServer().getOverworld();
-					int holes = 0;
-					for (int x = -7; x <= 7; x++) for (int z = 5; z < 28; z++)
-						if (world.getBlockState(new BlockPos(x, 99, z)).isAir()) holes++;
-					check(holes > 30, "High landing must leave a real crater");
-					var entity = world.getEntityById(bombId);
-					if (entity != null) entity.discard();
-				});
-			}
-			if (tick == 440) server(client, () -> slope(client));
-			if (tick > 455 && tick < 545) {
-				var entity = client.world.getEntityById(bombId);
-				if (entity != null) slopeAccelerated |= entity.getVelocity().horizontalLength() > 0.25;
-			}
-			if (tick == 500) capture(client, "downhill");
-			if (tick == 565) {
-				check(slopeAccelerated, "Downhill acceleration must reach client");
-				finish(client, "PASS eightTimes=true forwardSpawn=true fourBlocksPerSecond=true fortyBlockRange=true "
-					+ "crushFrames=" + frames + " crater=true quakePacket=true cameraShake=true shakeExpired=true downhill=true");
+			if (tick == (scenario == 0 ? 340 : 140)) {
+				check(smallSeen && giantSeen && rollSeen && crushSeen && quakeSeen,
+					"Missing stage: small=" + smallSeen + " giant=" + giantSeen + " rolling=" + rollSeen + " crush=" + crushSeen + " quake=" + quakeSeen);
+				check(rollSamples > 20, "Insufficient rendered rolling samples");
+				if (scenario == 0) {
+					check(entity == null, "Head must recycle after ground rolling journey");
+					check(victim instanceof HeadCrushAccess crushed && crushed.mhf$crushTicks() == 0, "Squash must expire");
+				}
+				System.out.println("GOLEM_DIRECTION_PASS yaw=" + THROW_YAWS[scenario] + " renderedSamples=" + rollSamples);
+				if (++scenario == THROW_YAWS.length) {
+					finish(client, "PASS directions=8 renderRotationMatchesTravel=true smallFlight=true verticalGiantDescent=true landingQuake=true rolling=true crush=true recovery=true");
+				} else {
+					int oldHead = headId, oldVictim = victimId;
+					server(client, () -> {
+						var world = client.getServer().getOverworld();
+						var h = world.getEntityById(oldHead);
+						var v = world.getEntityById(oldVictim);
+						if (h != null) h.discard();
+						if (v != null) v.discard();
+					});
+					tick = 0; headId = -1; victimId = -1; fallFrames = 0; rollSamples = 0;
+					smallSeen = giantSeen = rollSeen = crushSeen = quakeSeen = false;
+					fallPosition = null;
+				}
 			}
 		} catch (Throwable error) { finish(client, "FAIL " + error); }
 	}
@@ -131,62 +139,35 @@ public final class GolemClientValidation implements ClientModInitializer {
 	private void launch(MinecraftClient client) {
 		var world = client.getServer().getOverworld();
 		var player = client.getServer().getPlayerManager().getPlayerList().getFirst();
-		for (int x = -9; x <= 9; x++) for (int z = -8; z <= 58; z++) for (int y = 94; y <= 99; y++)
-			world.setBlockState(new BlockPos(x, y, z), (y == 99 ? Blocks.SMOOTH_QUARTZ : Blocks.STONE).getDefaultState());
-		for (int x = -2; x <= 2; x++) for (int y = 100; y <= 103; y++) world.setBlockState(new BlockPos(x, y, 14), Blocks.STONE_BRICKS.getDefaultState());
-		player.teleport(world, 0, 100, 0, 0, 0);
-		player.refreshPositionAndAngles(0, 100, 0, 0, 0);
-		player.setHeadYaw(0);
-		player.setBodyYaw(0);
-		player.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, com.nakami.mcheadfunction.head.HeadItems.item(com.nakami.mcheadfunction.head.HeadType.IRON_GOLEM).getDefaultStack());
+		// Set the server throw origin without moving the spectator camera away from the scene.
+		player.refreshPositionAndAngles(0, 100, 0, THROW_YAWS[scenario], 0);
+		player.setHeadYaw(THROW_YAWS[scenario]);
+		player.setBodyYaw(THROW_YAWS[scenario]);
+		player.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, HeadItems.item(HeadType.IRON_GOLEM).getDefaultStack());
 		var victim = net.minecraft.entity.EntityType.COW.create(world);
 		victim.setAiDisabled(true);
 		victim.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.GENERIC_MAX_HEALTH).setBaseValue(100);
 		victim.setHealth(100);
-		victim.setPosition(2.2, 100, 9);
+		var target = rotate(1.8, 18);
+		victim.setPosition(target.x, 100, target.z);
 		world.spawnEntity(victim);
 		victimId = victim.getId();
 		com.nakami.mcheadfunction.throwing.ThrowHandler.throwHeldHead(player);
-		var thrown = world.getEntitiesByClass(com.nakami.mcheadfunction.entity.ThrownHeadEntity.class, player.getBoundingBox().expand(6), e -> true).getFirst();
-		check(thrown.getPos().distanceTo(player.getPos()) > 4.4, "Spawn must be ahead of player");
-		bombId = thrown.getId();
-		player.teleport(world, 13, 109, 17, 135, 23);
-		player.getAbilities().flying = true;
-		player.sendAbilitiesUpdate();
+		var thrown = world.getEntitiesByClass(ThrownHeadEntity.class, player.getBoundingBox().expand(3), e -> e.getOwner() == player).getFirst();
+		check(!thrown.isActive() && thrown.getWidth() == 0.5F, "Throw must start small");
+		headId = thrown.getId();
+		var camera = rotate(20, 30);
+		player.teleport(world, camera.x, 113, camera.z, 130 + THROW_YAWS[scenario], 12);
 	}
 
-	private void drop(MinecraftClient client) {
-		var world = client.getServer().getOverworld();
-		var player = client.getServer().getPlayerManager().getPlayerList().getFirst();
-		var head = new com.nakami.mcheadfunction.entity.ThrownHeadEntity(world, player,
-			com.nakami.mcheadfunction.head.HeadType.IRON_GOLEM, com.nakami.mcheadfunction.head.HeadType.ThrowStyle.GOLEM_ROLL);
-		head.setPosition(0, 116, 7);
-		head.setVelocity(0, 0, 0.2);
-		world.spawnEntity(head);
-		bombId = head.getId();
-		player.teleport(world, 12, 110, 27, 140, 29);
-	}
-
-	private void slope(MinecraftClient client) {
-		var world = client.getServer().getOverworld();
-		var player = client.getServer().getPlayerManager().getPlayerList().getFirst();
-		for (int x = 20; x <= 30; x++) for (int z = -5; z <= 48; z++) {
-			int top = 108 - Math.max(0, z / 4);
-			for (int y = 93; y < top; y++) world.setBlockState(new BlockPos(x, y, z), Blocks.STONE_BRICKS.getDefaultState());
-		}
-		var head = new com.nakami.mcheadfunction.entity.ThrownHeadEntity(world, player,
-			com.nakami.mcheadfunction.head.HeadType.IRON_GOLEM, com.nakami.mcheadfunction.head.HeadType.ThrowStyle.GOLEM_ROLL);
-		head.setPosition(25, 108, 0);
-		head.setVelocity(0, 0, 0.2);
-		world.spawnEntity(head);
-		bombId = head.getId();
-		player.teleport(world, 38, 114, 23, 145, 29);
+	private Vec3d rotate(double x, double z) {
+		double angle = Math.toRadians(THROW_YAWS[scenario]);
+		return new Vec3d(x * Math.cos(angle) - z * Math.sin(angle), 0, x * Math.sin(angle) + z * Math.cos(angle));
 	}
 
 	private void capture(MinecraftClient client, String name) {
-		ScreenshotRecorder.saveScreenshot(client.runDirectory, name + ".png", client.getFramebuffer(), message -> {});
+		ScreenshotRecorder.saveScreenshot(client.runDirectory, "direction-" + scenario + "-" + name + ".png", client.getFramebuffer(), message -> {});
 	}
-
 	private void server(MinecraftClient client, Runnable action) {
 		client.getServer().execute(() -> { try { action.run(); } catch (Throwable error) { failure = error.toString(); } });
 	}
