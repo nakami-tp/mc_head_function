@@ -5,11 +5,15 @@ import com.nakami.mcheadfunction.head.*;
 import com.nakami.mcheadfunction.progression.HeadMastery;
 import com.nakami.mcheadfunction.wear.GoatCharge;
 import com.nakami.mcheadfunction.net.BlazeFlameS2CPayload;
+import com.nakami.mcheadfunction.net.BlazeLookS2CPayload;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import java.util.*;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
+import net.minecraft.block.AbstractFireBlock;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.particle.DustParticleEffect;
@@ -27,17 +31,18 @@ import org.joml.Vector3f;
 /** Owns temporary fire ground, heat and waves. All combat and lifetime decisions stay on the server. */
 public final class BlazeFire {
 	public static final int HIGH_HEAT = 40, MAX_HEAT = 80, COOLDOWN = 40;
-	private static final int TRAIL_LIFETIME = 120;
+	private static final int TRAIL_LIFETIME = 240;
 	private static final Map<ServerWorld, Field> FIELDS = new IdentityHashMap<>();
 	private static final DustParticleEffect EMBER = new DustParticleEffect(new Vector3f(0.65F, 0.12F, 0.02F), 0.9F);
 	private static final DustParticleEffect GOLD = new DustParticleEffect(new Vector3f(1, 0.65F, 0.08F), 1.1F);
 	private record Tile(UUID owner, BlockPos pos) { }
 	private record Ground(Vec3d center, long expires) { }
-	private record Front(Vec3d center, long at) { }
+	private record Front(Vec3d center, long at, boolean pillar) { }
 	private static final class Wave {
 		final UUID owner;
 		final List<Front> fronts = new ArrayList<>();
 		final Set<UUID> hit = new HashSet<>();
+		long lastRoar = Long.MIN_VALUE;
 		Wave(UUID owner) { this.owner = owner; }
 	}
 	private static final class Field {
@@ -56,12 +61,14 @@ public final class BlazeFire {
 		if (!canUse(p)) {
 			s.blazeHeat = 0; s.blazeSpraying = false;
 			if (s.skillHeld) s.blazeNeedsRelease = true;
+			syncLook(p);
 			return;
 		}
 		if (!s.skillHeld) s.blazeNeedsRelease = false;
 		s.blazeSpraying = s.skillHeld && !s.blazeNeedsRelease && s.blazeCooldown == 0;
 		if (!s.blazeSpraying) {
 			s.blazeHeat = Math.max(0, s.blazeHeat - 2);
+			syncLook(p);
 			return;
 		}
 		s.blazeHeat++;
@@ -70,9 +77,18 @@ public final class BlazeFire {
 			s.blazeHeat = 0; s.blazeCooldown = COOLDOWN; s.blazeNeedsRelease = true; s.blazeSpraying = false;
 			HeadSounds.play(p, SoundEvents.BLOCK_FIRE_EXTINGUISH, 0.8F, 0.7F);
 			p.getServerWorld().spawnParticles(ParticleTypes.SMOKE, p.getX(), p.getEyeY(), p.getZ(), 14, 0.4, 0.3, 0.4, 0.03);
+			syncLook(p);
 			return;
 		}
 		spray(p);
+		syncLook(p);
+	}
+
+	private static void syncLook(ServerPlayerEntity p) {
+		if (HeadLookups.worn(p) != HeadType.BLAZE || p.age % 2 != 0) return;
+		var s = PlayerHeadAccess.state(p);
+		var look = new BlazeLookS2CPayload(p.getId(), s.blazeHeat, s.blazeCooldown);
+		for (var viewer : PlayerLookup.tracking(p)) ServerPlayNetworking.send(viewer, look);
 	}
 
 	public static void release(ServerPlayerEntity p) {
@@ -97,6 +113,7 @@ public final class BlazeFire {
 				if (inCone(eye, look, center, range(p), 0.22) && visible(w, p, eye, center)) burn(w, p, target, 2);
 			}
 		}
+		igniteSpray(p, eye, look);
 		emit(w, new BlazeFlameS2CPayload(p.getId(), eye, look, (float) range(p), PlayerHeadAccess.state(p).blazeHeat, false));
 		if (p.age % 15 == 0) HeadSounds.play(p, SoundEvents.ENTITY_BLAZE_SHOOT, 0.25F, 0.8F);
 	}
@@ -123,6 +140,8 @@ public final class BlazeFire {
 				// Quantized cells merge repeated throws and give a stable, continuous two-block footprint.
 				Vec3d tileCenter = new Vec3d(cell.getX() + 0.5, center.y, cell.getZ() + 0.5);
 				field.ground.put(new Tile(owner.getUuid(), cell), new Ground(tileCenter, w.getTime() + TRAIL_LIFETIME));
+				ignite(w, owner, cell);
+				ignite(w, owner, cell.down());
 			}
 		}
 		for (var target : w.getEntitiesByClass(LivingEntity.class, new Box(start, end).expand(0.45), e -> e != owner && e.isAlive())) {
@@ -140,8 +159,8 @@ public final class BlazeFire {
 		if (side.lengthSquared() < 0.01) side = new Vec3d(1, 0, 0);
 		for (int step = 1; step <= 6; step++) {
 			for (int lane = -3; lane <= 3; lane++) {
-				Vec3d center = eye.add(look.multiply(step)).add(side.multiply(lane * step * 0.12)).add(0, -0.7, 0);
-				if (visible(w, p, eye, center)) wave.fronts.add(new Front(center, w.getTime() + step));
+				Vec3d center = eye.add(look.multiply(step)).add(side.multiply(lane * step / 6.0)).add(0, -0.7, 0);
+				if (visible(w, p, eye, center)) wave.fronts.add(new Front(center, w.getTime() + step * 2, false));
 			}
 		}
 		field.waves.add(wave);
@@ -180,13 +199,25 @@ public final class BlazeFire {
 			for (Front front : due) {
 				Vec3d c = front.center;
 				if (!w.isChunkLoaded(BlockPos.ofFloored(c)) || !w.getFluidState(BlockPos.ofFloored(c)).isEmpty()) continue;
-				emit(w, new BlazeFlameS2CPayload(owner.getId(), c, new Vec3d(0, 1, 0), 1.4F, HIGH_HEAT, true));
-				for (var target : w.getEntitiesByClass(LivingEntity.class, new Box(c.x - 0.65, c.y - 0.4, c.z - 0.65, c.x + 0.65, c.y + 1.5, c.z + 0.65), e -> e != owner && e.isAlive())) {
+				ignite(w, owner, BlockPos.ofFloored(c));
+				float height = front.pillar ? 5.0F : 2.8F;
+				var ceiling = ray(w, owner, c, c.add(0, height, 0));
+				if (ceiling.getType() != HitResult.Type.MISS) height = (float) ceiling.getPos().distanceTo(c);
+				emit(w, new BlazeFlameS2CPayload(owner.getId(), c, new Vec3d(0, 1, 0), height, MAX_HEAT, true));
+				if (front.pillar) {
+					for (int y = 0; y <= (int) height; y++) ignite(w, owner, BlockPos.ofFloored(c.add(0, y, 0)));
+					if (wave.lastRoar == Long.MIN_VALUE || now - wave.lastRoar >= 4) {
+						wave.lastRoar = now;
+						w.playSound(null, c.x, c.y, c.z, SoundEvents.ENTITY_BLAZE_SHOOT,
+							net.minecraft.sound.SoundCategory.PLAYERS, 0.6F, 0.65F);
+					}
+				}
+				for (var target : w.getEntitiesByClass(LivingEntity.class, new Box(c.x - 0.65, c.y - 0.4, c.z - 0.65, c.x + 0.65, c.y + height, c.z + 0.65), e -> e != owner && e.isAlive())) {
 					if (!wave.hit.contains(target.getUuid()) && visible(w, owner, c.add(0, 0.1, 0), target.getBoundingBox().getCenter())) {
 						wave.hit.add(target.getUuid());
 						if (burn(w, owner, target, 6) && !HeadLookups.isBoss(target)) {
 							Vec3d push = target.getPos().subtract(owner.getPos()).multiply(1, 0, 1).normalize().multiply(0.35);
-							target.addVelocity(push.x, 0.12, push.z); target.velocityModified = true;
+							target.addVelocity(push.x, front.pillar ? 0.45 : 0.2, push.z); target.velocityModified = true;
 						}
 					}
 				}
@@ -197,7 +228,7 @@ public final class BlazeFire {
 					if (e.getKey().owner.equals(wave.owner) && Math.abs(next.y - c.y) < 1.6
 						&& Math.abs(next.x - c.x) <= 1.05 && Math.abs(next.z - c.z) <= 1.05
 						&& visible(w, owner, c.add(0, 0.15, 0), next.add(0, 0.15, 0))) {
-						wave.fronts.add(new Front(next, now + 2)); ground.remove();
+						wave.fronts.add(new Front(next, now + 2, true)); ground.remove();
 					}
 				}
 			}
@@ -205,6 +236,57 @@ public final class BlazeFire {
 		}
 		if (field.ground.isEmpty() && field.waves.isEmpty()) FIELDS.remove(w);
 	}
+	private static void igniteSpray(ServerPlayerEntity p, Vec3d eye, Vec3d look) {
+		ServerWorld w = p.getServerWorld();
+		double range = range(p);
+		var hit = ray(w, p, eye, eye.add(look.multiply(range)));
+		Vec3d end = hit.getType() == HitResult.Type.MISS ? eye.add(look.multiply(range)) : hit.getPos();
+		int steps = Math.max(1, (int) Math.ceil(end.distanceTo(eye) * 2));
+		Vec3d side = look.crossProduct(new Vec3d(0, 1, 0)).normalize();
+		if (side.lengthSquared() < 0.01) side = new Vec3d(1, 0, 0);
+		for (int i = 0; i <= steps; i++) {
+			Vec3d point = eye.lerp(end, (double) i / steps);
+			double width = 0.65 + point.distanceTo(eye) * 0.22;
+			ignite(w, p, BlockPos.ofFloored(point));
+			ignite(w, p, BlockPos.ofFloored(point.add(side.multiply(width * 0.4))));
+			ignite(w, p, BlockPos.ofFloored(point.add(side.multiply(-width * 0.4))));
+		}
+		if (hit.getType() == HitResult.Type.BLOCK) {
+			ignite(w, p, hit.getBlockPos());
+			ignite(w, p, hit.getBlockPos().offset(hit.getSide()));
+		}
+	}
+
+	/** Places vanilla fire only beside burnable blocks, never on bare stone. */
+	private static void ignite(ServerWorld w, ServerPlayerEntity owner, BlockPos pos) {
+		if (!w.isChunkLoaded(pos) || !w.canPlayerModifyAt(owner, pos) || !w.getFluidState(pos).isEmpty()) return;
+		BlockState state = w.getBlockState(pos);
+		if (state.isOf(Blocks.FIRE) || state.isOf(Blocks.SOUL_FIRE)) return;
+		if (state.isAir() || state.isReplaceable()) {
+			placeFire(w, pos);
+			return;
+		}
+		if (!state.isBurnable()) return;
+		for (Direction side : Direction.values()) placeFire(w, pos.offset(side));
+	}
+
+	private static void placeFire(ServerWorld w, BlockPos pos) {
+		if (!w.isChunkLoaded(pos) || !w.getFluidState(pos).isEmpty()) return;
+		BlockState current = w.getBlockState(pos);
+		if (!(current.isAir() || current.isReplaceable())) return;
+		boolean nearBurnable = false;
+		for (Direction side : Direction.values()) {
+			if (w.getBlockState(pos.offset(side)).isBurnable()) {
+				nearBurnable = true;
+				break;
+			}
+		}
+		if (!nearBurnable) return;
+		BlockState fire = AbstractFireBlock.getState(w, pos);
+		if (!fire.canPlaceAt(w, pos)) return;
+		w.setBlockState(pos, fire);
+	}
+
 	private static boolean burn(ServerWorld w, ServerPlayerEntity owner, LivingEntity target, float amount) {
 		if (target.isFireImmune() || target.isSpectator()) return false;
 		var key = RegistryKey.of(RegistryKeys.DAMAGE_TYPE, McHeadFunction.id("blaze_fire"));

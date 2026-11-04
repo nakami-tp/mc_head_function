@@ -2,6 +2,7 @@ package com.nakami.mcheadfunction.validation;
 
 import com.nakami.mcheadfunction.head.*;
 import com.nakami.mcheadfunction.net.HeadSkillC2SPayload;
+import com.nakami.mcheadfunction.wear.FrogMouth;
 import java.nio.file.*;
 import java.util.*;
 import net.fabricmc.api.ClientModInitializer;
@@ -17,6 +18,7 @@ import net.minecraft.registry.RegistryKeys;
 import net.minecraft.resource.DataConfiguration;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.*;
 import net.minecraft.world.gen.*;
 import net.minecraft.world.level.LevelInfo;
@@ -47,8 +49,9 @@ public final class FrogClientValidation implements ClientModInitializer {
 				client.options.getSoundVolumeOption(SoundCategory.MASTER).setValue(1.0);
 				client.getSoundManager().registerListener((sound, set, range) -> {
 					String id = sound.getId().toString();
-					if (id.contains("frog") || id.contains("slime") || id.contains("snowball"))
+					if (id.contains("frog") || id.contains("slime") || id.contains("snowball") || id.contains("eat") || id.contains("burp"))
 						sounds.add("tick=" + ticks + " " + id + " volume=" + sound.getVolume() + " pitch=" + sound.getPitch());
+					if (id.equals("minecraft:entity.generic.eat") && ticks >= 120) chewSounds++;
 					if (id.equals("minecraft:entity.frog.tongue")) {
 						// Vanilla tongue sound has a 0.5 asset gain: 1.6 × 0.5 = 0.8 at the listener.
 						if (sound.getVolume() < 0.75F || sound.getVolume() > 0.85F || sound.getPitch() < 1.05F || sound.getPitch() > 1.15F)
@@ -87,8 +90,10 @@ public final class FrogClientValidation implements ClientModInitializer {
 		} catch (Throwable e) { finish(client, "FAIL " + e); }
 	}
 
-	private int visibleFrames, carryingFrames, launchSounds;
+	private int visibleFrames, carryingFrames, launchSounds, chewSounds, chewFrames;
 	private boolean extended, returning;
+	private volatile int cowId = -1;
+	private Vec3d swallowedAt;
 	private void scenario(MinecraftClient client) {
 		if (ticks == 20 || ticks == 80) press();
 		if (ticks == 83) client.player.setPitch(30);
@@ -96,8 +101,87 @@ public final class FrogClientValidation implements ClientModInitializer {
 		if (ticks == 120) {
 			check(launchSounds == 2, "Each grab must play one prominent tongue sound; got " + launchSounds);
 			check(client.player.getInventory().count(net.minecraft.item.Items.DIRT) == 1, "Second grab must deliver dirt");
-			finish(client, "PASS 10-tick grab, prominent launch audio, first/third person, minimal particles, extension, delayed removal, carried chest/dirt, return, exact delivery and expiry; visibleFrames=" + visibleFrames);
+			client.options.setPerspective(Perspective.FIRST_PERSON);
+			client.player.setYaw(0);
+			client.player.setPitch(15);
+			onServer(client, () -> {
+				var world = client.getServer().getOverworld();
+				var p = client.getServer().getPlayerManager().getPlayerList().getFirst();
+				p.teleport(world, 0.5, 100, 0.5, 0, 15);
+				var cow = EntityType.COW.create(world);
+				cow.setAiDisabled(true);
+				cow.setNoGravity(true);
+				cow.refreshPositionAndAngles(0.5, 100, 3.5, 0, 0);
+				cow.setOnFireFor(8);
+				world.spawnEntity(cow);
+				cowId = cow.getId();
+			});
 		}
+		if (ticks == 128) press();
+		if (ticks == 142) {
+			var held = FrogMouth.held(client.player);
+			check(held != null && held.getId() == cowId, "Burning cow must be held in the mouth; held=" + held);
+			check(!held.doesRenderOnFire(), "Swallowed fire must not draw in front of the wearer");
+			check(Math.abs(held.getX() - client.player.getX()) < 0.35 && Math.abs(held.getZ() - client.player.getZ()) < 0.35,
+				"Held cow must sit inside the wearer, not in front of the camera; cow=" + held.getPos() + " player=" + client.player.getPos());
+			swallowedAt = client.player.getPos();
+			capture(client, "frog-mouth-first.png");
+		}
+		if (ticks > 142 && ticks < 185 && FrogMouth.held(client.player) != null) {
+			chewFrames++;
+			if (ticks == 152 || ticks == 162 || ticks == 172) capture(client, "frog-chew-" + ticks + ".png");
+		}
+		if (ticks == 170) {
+			check(swallowedAt != null && client.player.getPos().squaredDistanceTo(swallowedAt) < 0.05,
+				"Wearer must not be shoved by the mouthful; start=" + swallowedAt + " now=" + client.player.getPos());
+			var held = FrogMouth.held(client.player);
+			check(held != null && !held.doesRenderOnFire(), "Held cow must stay hidden from fire overlay");
+			client.options.setPerspective(Perspective.THIRD_PERSON_FRONT);
+			capture(client, "frog-mouth-third.png");
+		}
+		if (ticks == 185) {
+			check(chewFrames >= 20, "Chewing must last long enough to see digestion; frames=" + chewFrames);
+			check(chewSounds >= 2, "Digesting must play chew audio; got " + chewSounds);
+			// Projectile sequence follows the existing digestion regression.
+		}
+		if (ticks == 280) {
+			check(!com.nakami.mcheadfunction.wear.FrogProjectile.occupied(client.player), "Spit must clear synchronized mouth state");
+			finish(client, "PASS intercepted fireball and arrow, synchronized mouth ammo, first-person tremble, third-person mouth and fletching, manual return; 10-tick grab, prominent launch audio, first/third person, minimal particles, extension, delayed removal, carried chest/dirt, return, exact delivery and expiry, swallowed burning cow stays inside wearer without fire overlay or shove, chew crumbs and audio; visibleFrames=" + visibleFrames + " chewFrames=" + chewFrames + " chewSounds=" + chewSounds);
+		}
+		if (ticks == 190 || ticks == 235) {
+			client.options.setPerspective(Perspective.THIRD_PERSON_FRONT);
+			client.player.setYaw(0); client.player.setPitch(0);
+			boolean fire = ticks == 190;
+			onServer(client, () -> {
+				var p = client.getServer().getPlayerManager().getPlayerList().getFirst();
+				var held = FrogMouth.held(p); if (held != null) held.discard();
+				p.setHealth(20); p.setYaw(0); p.setPitch(0);
+				if (!fire) {
+					var outgoing = p.getServerWorld().getEntitiesByClass(net.minecraft.entity.projectile.FireballEntity.class,
+						p.getBoundingBox().expand(40), e -> e.getOwner() == p);
+					check(outgoing.size() == 1, "Manual spit must spawn exactly one player-owned fireball");
+					outgoing.forEach(Entity::discard);
+				}
+				PlayerHeadAccess.state(p).frogCooldown = 0;
+				var projectile = fire ? EntityType.FIREBALL.create(p.getServerWorld()) : EntityType.ARROW.create(p.getServerWorld());
+				projectile.setPosition(p.getEyePos().add(0, -.28, 6));
+				projectile.setVelocity(0, 0, -.2); projectile.setNoGravity(true);
+				if (projectile instanceof net.minecraft.entity.projectile.ExplosiveProjectileEntity explosive) explosive.accelerationPower = 0;
+				p.getServerWorld().spawnEntity(projectile);
+			});
+		}
+		if (ticks == 198 || ticks == 243) press();
+		if (ticks == 207 || ticks == 252) {
+			int expected = ticks == 207 ? 1 : 2;
+			check(com.nakami.mcheadfunction.wear.FrogProjectile.appearance(client.player) == expected, "Projectile mouth state must sync: " + expected);
+			capture(client, expected == 1 ? "frog-fireball-third.png" : "frog-arrow-third.png");
+		}
+		if (ticks == 210 || ticks == 255) client.options.setPerspective(Perspective.FIRST_PERSON);
+		if (ticks == 214 || ticks == 259) {
+			check(Math.abs(com.nakami.mcheadfunction.client.FrogMouthEffects.pitch(.37F)) > .01F, "Held ammunition must produce first-person tremble");
+			capture(client, ticks == 214 ? "frog-fireball-first.png" : "frog-arrow-first.png");
+		}
+		if (ticks == 220 || ticks == 265) press();
 		for (var entity : client.world.getEntities()) {
 			if (!(entity instanceof com.nakami.mcheadfunction.entity.FrogTongueEntity tongue) || ticks > 65) continue;
 			visibleFrames++;

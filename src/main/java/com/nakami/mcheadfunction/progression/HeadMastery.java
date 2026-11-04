@@ -14,7 +14,10 @@ public final class HeadMastery {
 	private HeadMastery() { }
 	public static void register() {
 		ServerPlayerEvents.COPY_FROM.register((oldPlayer, newPlayer, alive) ->
-			PlayerHeadAccess.state(newPlayer).mastery.putAll(PlayerHeadAccess.state(oldPlayer).mastery));
+			{
+                PlayerHeadAccess.state(newPlayer).mastery.putAll(PlayerHeadAccess.state(oldPlayer).mastery);
+                if (alive) PlayerHeadAccess.state(newPlayer).zombieDrainTicks = PlayerHeadAccess.state(oldPlayer).zombieDrainTicks;
+            });
 	}
 	public static int points(PlayerEntity player, HeadType type) {
 		return PlayerHeadAccess.state(player).mastery.getOrDefault(type, 0);

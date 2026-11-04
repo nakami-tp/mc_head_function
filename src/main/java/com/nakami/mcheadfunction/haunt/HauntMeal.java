@@ -30,15 +30,21 @@ public final class HauntMeal {
 		if (sound != null) victim.playSound(sound, access.mhf$soundVolume(), victim.getSoundPitch());
 	}
 
-	public static List<ItemStack> consume(ServerWorld world, LivingEntity victim, Entity tongue) {
+	/** Runs an action that may make the victim drop loot, collecting those stacks instead of spawning them. */
+	public static List<ItemStack> capture(LivingEntity victim, Runnable action) {
 		var drops = new ArrayList<ItemStack>();
 		Capture previous = CURRENT.get();
 		CURRENT.set(new Capture(victim, drops));
 		try {
-			((LivingEntityDropInvoker) victim).mhf$drop(world, world.getDamageSources().mobProjectile(tongue, null));
+			action.run();
 		} finally {
 			if (previous == null) CURRENT.remove(); else CURRENT.set(previous);
 		}
+		return drops;
+	}
+
+	public static List<ItemStack> consume(ServerWorld world, LivingEntity victim, Entity tongue) {
+		var drops = capture(victim, () -> ((LivingEntityDropInvoker) victim).mhf$drop(world, world.getDamageSources().mobProjectile(tongue, null)));
 		// Use vanilla death smoke at the visible mouth, including with minimal particles.
 		for (var player : world.getPlayers()) {
 			if (player.squaredDistanceTo(tongue) <= 32 * 32)

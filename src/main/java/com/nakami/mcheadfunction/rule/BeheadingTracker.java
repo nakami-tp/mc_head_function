@@ -5,7 +5,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Three glove punches or empty-hand shakes on the same target inside a time window starting with the first hit.
+ * Three glove punches on the same target inside a time window starting with the first hit.
  */
 public final class BeheadingTracker {
 	private final Map<Key, Window> windows = new HashMap<>();

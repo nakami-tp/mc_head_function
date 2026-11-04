@@ -26,7 +26,9 @@ public abstract class GloveHeldFeatureMixin extends FeatureRenderer<LivingEntity
 	@Inject(method = "renderItem", at = @At("HEAD"), cancellable = true)
 	private void mhf$wearGlove(LivingEntity entity, ItemStack stack, ModelTransformationMode mode, Arm arm,
 		MatrixStack matrices, VertexConsumerProvider vertices, int light, CallbackInfo ci) {
-		if (!(entity instanceof PlayerEntity) || !stack.isOf(HeadItems.BEHEADING_GLOVE)) return;
+		if (entity instanceof PlayerEntity player && arm == player.getMainArm()
+            && com.nakami.mcheadfunction.client.CreeperCookingControl.held(player) != null) { ci.cancel(); return; }
+        if (!(entity instanceof PlayerEntity) || !stack.isOf(HeadItems.BEHEADING_GLOVE)) return;
 		matrices.push();
 		((ModelWithArms) getContextModel()).setArmAngle(arm, matrices);
 		GloveRenderer.render(arm, matrices, vertices, light);

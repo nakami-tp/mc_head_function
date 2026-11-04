@@ -21,6 +21,27 @@ public class BlazeGameplayTest implements FabricGameTest {
 		p.equipStack(EquipmentSlot.HEAD, new ItemStack(HeadItems.item(HeadType.BLAZE)));
 		return p;
 	}
+	@GameTest(templateName = "mc_head_function:blaze_arena", tickLimit = 110)
+	public void waveIgnitesTwoSeparateTrailsIntoTallPillars(TestContext c) {
+		floor(c); var p = player(c);
+		for (int x : new int[]{0, 4}) {
+			var a = c.getAbsolutePos(new BlockPos(x, 3, 6));
+			com.nakami.mcheadfunction.blaze.BlazeFire.trail(p.getServerWorld(), p,
+				net.minecraft.util.math.Vec3d.ofCenter(a), net.minecraft.util.math.Vec3d.ofCenter(a.add(0, 0, 9)));
+		}
+		var left = cow(c, 0, 13); left.setPosition(left.getPos().add(0, 3, 0));
+		var right = cow(c, 4, 13); right.setPosition(right.getPos().add(0, 3, 0));
+		SkillHandler.onSkill(p, true);
+		c.waitAndRun(45, () -> {
+			SkillHandler.onSkill(p, false);
+			c.waitAndRun(40, () -> {
+				c.assertTrue(left.getHealth() < 100, "Left disconnected trail must erupt above normal wave height");
+				c.assertTrue(right.getHealth() < 100, "Right disconnected trail must also erupt");
+				c.complete();
+			});
+		});
+	}
+
 	@GameTest(templateName = "mc_head_function:blaze_arena", tickLimit = 40)
 	public void sprayDealsDirectDamageAndCannotBurnThroughWall(TestContext c) {
 		var p = player(c);
@@ -56,7 +77,7 @@ public class BlazeGameplayTest implements FabricGameTest {
 		p.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, new ItemStack(HeadItems.item(HeadType.BLAZE)));
 		com.nakami.mcheadfunction.throwing.ThrowHandler.throwHeldHead(p);
 	}
-	@GameTest(templateName = "mc_head_function:blaze_arena", tickLimit = 170)
+	@GameTest(templateName = "mc_head_function:blaze_arena", tickLimit = 290)
 	public void horizontalThrowLeavesDamagingGroundThenExpires(TestContext c) {
 		floor(c); var p = player(c); throwHead(p);
 		c.waitAndRun(20, () -> {
@@ -67,14 +88,59 @@ public class BlazeGameplayTest implements FabricGameTest {
 			});
 		});
 		c.waitAndRun(145, () -> {
+			var stillBurning = cow(c, 2, 10);
+			c.waitAndRun(15, () -> {
+				c.assertTrue(stillBurning.getHealth() < 100, "Fire trail must still damage after six seconds");
+				stillBurning.discard();
+			});
+		});
+		c.waitAndRun(265, () -> {
 			var target = cow(c, 2, 10);
 			c.waitAndRun(15, () -> {
-				c.assertTrue(target.getHealth() == 100 && !target.isOnFire(), "Temporary fire must expire after six seconds");
-				c.assertTrue(c.getBlockState(new BlockPos(2, 2, 10)).isAir(), "Fire trail must not place fire blocks");
+				c.assertTrue(target.getHealth() == 100 && !target.isOnFire(), "Temporary fire must expire after twelve seconds");
+				c.assertTrue(c.getBlockState(new BlockPos(2, 2, 10)).isAir(), "Fire trail must not ignite non-flammable stone");
 				c.complete();
 			});
 		});
 	}
+	@GameTest(templateName = "mc_head_function:blaze_arena", tickLimit = 40)
+	public void sprayIgnitesFlammableWall(TestContext c) {
+		var p = player(c);
+		for (int y = 2; y <= 4; y++) c.setBlockState(new BlockPos(2, y, 5), Blocks.OAK_PLANKS);
+		SkillHandler.onSkill(p, true);
+		c.waitAndRun(8, () -> {
+			c.assertTrue(hasFireNear(c, new BlockPos(2, 3, 5)), "Spray must ignite flammable oak");
+			SkillHandler.onSkill(p, false);
+			c.complete();
+		});
+	}
+
+	@GameTest(templateName = "mc_head_function:blaze_arena", tickLimit = 40)
+	public void throwIgnitesFlammableTrail(TestContext c) {
+		for (int x = 0; x <= 5; x++) for (int z = 0; z <= 19; z++) {
+			c.setBlockState(new BlockPos(x, 1, z), Blocks.OAK_PLANKS);
+			for (int y = 2; y <= 6; y++) c.setBlockState(new BlockPos(x, y, z), Blocks.AIR);
+		}
+		var p = player(c);
+		throwHead(p);
+		c.waitAndRun(20, () -> {
+			boolean fire = false;
+			for (int z = 3; z <= 14; z++) {
+				if (hasFireNear(c, new BlockPos(2, 2, z))) fire = true;
+			}
+			c.assertTrue(fire, "Thrown fire trail must ignite oak planks");
+			c.complete();
+		});
+	}
+
+	private static boolean hasFireNear(TestContext c, BlockPos origin) {
+		for (int dx = -1; dx <= 1; dx++) for (int dy = -1; dy <= 1; dy++) for (int dz = -1; dz <= 1; dz++) {
+			var state = c.getBlockState(origin.add(dx, dy, dz));
+			if (state.isOf(Blocks.FIRE) || state.isOf(Blocks.SOUL_FIRE)) return true;
+		}
+		return false;
+	}
+
 	@GameTest(templateName = "mc_head_function:blaze_arena", tickLimit = 85)
 	public void hotReleaseHitsWideTargetOnlyOnce(TestContext c) {
 		var p = player(c); SkillHandler.onSkill(p, true);

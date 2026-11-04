@@ -1,5 +1,6 @@
 package com.nakami.mcheadfunction.validation;
 
+import com.nakami.mcheadfunction.client.BlazeHeadAppearance;
 import com.nakami.mcheadfunction.client.HeadHud;
 import com.nakami.mcheadfunction.head.*;
 import com.nakami.mcheadfunction.net.*;
@@ -26,6 +27,7 @@ public final class BlazeClientValidation implements ClientModInitializer {
 	private volatile boolean ready;
 	private volatile String failure;
 	private volatile int targetId;
+	private volatile int secondTargetId;
 	private volatile int interruptionTarget;
 	public static boolean sideView;
 	private net.minecraft.client.particle.Particle movingFlame;
@@ -76,7 +78,16 @@ public final class BlazeClientValidation implements ClientModInitializer {
 				if (HeadHud.status.blazeHeat() >= 40) highFrames++;
 				if (HeadHud.status.blazeCooldown() > 0) coolingFrames++;
 			}
-			if (tick == 25) ClientPlayNetworking.send(new ThrowHeadC2SPayload());
+			if (tick == 25) {
+				ClientPlayNetworking.send(new ThrowHeadC2SPayload());
+				server(c, () -> {
+					var w = c.getServer().getOverworld();
+					var p = c.getServer().getPlayerManager().getPlayerList().getFirst();
+					for (double x : new double[]{-1.5, 2.5})
+						com.nakami.mcheadfunction.blaze.BlazeFire.trail(w, p,
+							new net.minecraft.util.math.Vec3d(x, 101, 4.5), new net.minecraft.util.math.Vec3d(x, 101, 16));
+				});
+			}
 			if (tick == 34) server(c, () -> {
 				var p = c.getServer().getPlayerManager().getPlayerList().getFirst();
 				p.teleport(c.getServer().getOverworld(), 6, 103, 8, 90, 27);
@@ -87,17 +98,26 @@ public final class BlazeClientValidation implements ClientModInitializer {
 				ClientPlayNetworking.send(new HeadSkillC2SPayload(true));
 				server(c, () -> {
 					var w = c.getServer().getOverworld(); var cow = EntityType.COW.create(w);
-					cow.refreshPositionAndAngles(0.5, 101, 13, 180, 0); cow.setAiDisabled(true); cow.setNoGravity(true);
+					cow.refreshPositionAndAngles(-1.5, 103, 13, 180, 0); cow.setAiDisabled(true); cow.setNoGravity(true);
 					cow.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.GENERIC_MAX_HEALTH).setBaseValue(100); cow.setHealth(100);
 					w.spawnEntity(cow); targetId = cow.getId();
+					var other = EntityType.COW.create(w);
+					other.refreshPositionAndAngles(2.5, 103, 13, 180, 0); other.setAiDisabled(true); other.setNoGravity(true);
+					other.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.GENERIC_MAX_HEALTH).setBaseValue(100); other.setHealth(100);
+					w.spawnEntity(other); secondTargetId = other.getId();
 				});
 			}
 			if (tick == 85) capture(c, "02-high-heat.png");
-			if (tick == 90) { check(highFrames > 0, "high heat never synchronized"); ClientPlayNetworking.send(new HeadSkillC2SPayload(false)); }
-			if (tick == 92) server(c, () -> c.getServer().getPlayerManager().getPlayerList().getFirst().teleport(c.getServer().getOverworld(), 6, 103, 8, 90, 27));
+			if (tick == 90) {
+				check(highFrames > 0, "high heat never synchronized");
+				check(BlazeHeadAppearance.renderedHigh > 0, "high-heat head was not drawn");
+				ClientPlayNetworking.send(new HeadSkillC2SPayload(false));
+			}
+			if (tick == 92) server(c, () -> c.getServer().getPlayerManager().getPlayerList().getFirst().teleport(c.getServer().getOverworld(), 12, 104, 9, 90, 15));
 			if (tick == 94 || tick == 100 || tick == 108) capture(c, "03-wave-" + tick + ".png");
 			if (tick == 125) {
 				check(c.world.getEntityById(targetId) instanceof LivingEntity, "target not tracked");
+				check(c.world.getEntityById(secondTargetId) instanceof LivingEntity other && other.getHealth() <= 94, "second trail pillar did not hit raised target");
 				var cow = (LivingEntity)c.world.getEntityById(targetId);
 				check(cow.getHealth() <= 94 && cow.getHealth() >= 92, "propagated hit did not sync once: " + cow.getHealth());
 				server(c, () -> c.getServer().getPlayerManager().getPlayerList().getFirst().teleport(c.getServer().getOverworld(), 0.5, 100, 0.5, 0, 0));
@@ -105,7 +125,12 @@ public final class BlazeClientValidation implements ClientModInitializer {
 				ClientPlayNetworking.send(new HeadSkillC2SPayload(true));
 			}
 			if (tick == 150) capture(c, "04-first-person.png");
-			if (tick == 213) { check(coolingFrames > 0, "overheat did not sync"); capture(c, "05-overheated.png"); }
+			if (tick == 208) c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			if (tick == 213) {
+				check(coolingFrames > 0, "overheat did not sync");
+				check(BlazeHeadAppearance.renderedCooling > 0, "overheat head was not drawn");
+				capture(c, "05-overheated.png");
+			}
 			if (tick == 255) {
 				check(HeadHud.status != null && !HeadHud.status.active() && HeadHud.status.blazeHeat() == 0, "held R restarted after overheat");
 				check(readySounds > 0 && waveSounds > 0, "missing heat/wave sounds");
@@ -176,17 +201,17 @@ public final class BlazeClientValidation implements ClientModInitializer {
 		if (tick >= 425 && tick < 495) capture(c, String.format("motion-%03d.png", tick - 425));
 		if (tick == 474) ClientPlayNetworking.send(new HeadSkillC2SPayload(false));
 		if (tick == 477 || tick == 480 || tick == 484) capture(c, "10-side-wave-" + tick + ".png");
-		if (tick == 500) {
+		if (tick == 510) {
 			check(flames(c).isEmpty(), "flames survived release beyond their lifetime");
 			sideView = false; c.options.hudHidden = false;
 			c.options.setPerspective(Perspective.FIRST_PERSON);
 			c.options.getParticles().setValue(net.minecraft.client.option.ParticlesMode.MINIMAL);
 		}
-		if (tick == 505) ClientPlayNetworking.send(new HeadSkillC2SPayload(true));
+		if (tick == 515) ClientPlayNetworking.send(new HeadSkillC2SPayload(true));
 		if (tick == 535) { check(flames(c).size() >= 4, "minimal particles lost the core flame"); capture(c, "11-first-minimal.png"); }
 		if (tick == 550) capture(c, "12-first-high.png");
 		if (tick == 555) ClientPlayNetworking.send(new HeadSkillC2SPayload(false));
-		if (tick == 580) check(flames(c).isEmpty(), "minimal flame did not expire");
+		if (tick == 588) check(flames(c).isEmpty(), "minimal flame did not expire");
 		if (tick == 590) {
 			c.options.getParticles().setValue(net.minecraft.client.option.ParticlesMode.ALL);
 			sideView = true; c.options.hudHidden = true;
@@ -225,7 +250,9 @@ public final class BlazeClientValidation implements ClientModInitializer {
 		if (tick == 710) {
 			check(flames(c).isEmpty(), "water flame kept emitting");
 			check(pendingScreenshots == 0, "screenshots not saved");
-			finish(c, "PASS highFrames=" + highFrames + " coolingFrames=" + coolingFrames + " readySounds=" + readySounds
+			finish(c, "PASS highFrames=" + highFrames + " coolingFrames=" + coolingFrames
+				+ " renderedHigh=" + BlazeHeadAppearance.renderedHigh + " renderedCooling=" + BlazeHeadAppearance.renderedCooling
+				+ " readySounds=" + readySounds
 				+ " waveSounds=" + waveSounds + " spectator/water cancelled; moving flames, release lifetime, minimal particles, wall/water collision");
 		}
 	}

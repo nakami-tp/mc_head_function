@@ -26,7 +26,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LivingEntity.class)
-public abstract class LivingEntityMixin extends Entity implements com.nakami.mcheadfunction.head.HeadShakeAccess, com.nakami.mcheadfunction.head.HeadCrushAccess, HeadlessAccess, com.nakami.mcheadfunction.head.HeadStunAccess, com.nakami.mcheadfunction.haunt.HauntRisenAccess {
+public abstract class LivingEntityMixin extends Entity implements com.nakami.mcheadfunction.head.HeadShakeAccess, com.nakami.mcheadfunction.head.HeadCrushAccess, HeadlessAccess, com.nakami.mcheadfunction.head.HeadStunAccess, com.nakami.mcheadfunction.haunt.HauntRisenAccess, com.nakami.mcheadfunction.head.FrogMouthAccess {
 	@Unique
 	private static final TrackedData<Integer> MHF_HEAD_SHAKE = DataTracker.registerData(LivingEntity.class, TrackedDataHandlerRegistry.INTEGER);
 	@Override public int mhf$headShakeTicks() { return dataTracker.get(MHF_HEAD_SHAKE); }
@@ -55,25 +55,57 @@ public abstract class LivingEntityMixin extends Entity implements com.nakami.mch
 	@Override public void mhf$setHauntRiseTicks(int ticks) { dataTracker.set(MHF_HAUNT_RISE, Math.max(0, ticks)); }
 
 	@Unique
+	private static final TrackedData<Integer> MHF_MOUTH_HELD = DataTracker.registerData(LivingEntity.class, TrackedDataHandlerRegistry.INTEGER);
+	@Unique
+	private static final TrackedData<Integer> MHF_MOUTH_HOLDER = DataTracker.registerData(LivingEntity.class, TrackedDataHandlerRegistry.INTEGER);
+	@Override public int mhf$mouthHeld() { return dataTracker.get(MHF_MOUTH_HELD); }
+	@Override public void mhf$setMouthHeld(int id) { dataTracker.set(MHF_MOUTH_HELD, id); }
+	@Override public int mhf$mouthHolder() { return dataTracker.get(MHF_MOUTH_HOLDER); }
+	@Override public void mhf$setMouthHolder(int id) { dataTracker.set(MHF_MOUTH_HOLDER, id); }
+
+	@Unique
 	private float mhf$healthBeforeDamage;
+	@Unique
+	private static final TrackedData<Integer> MHF_MOUTH_AMMO = DataTracker.registerData(LivingEntity.class, TrackedDataHandlerRegistry.INTEGER);
+	@Override public int mhf$mouthAmmo() { return dataTracker.get(MHF_MOUTH_AMMO); }
+	@Override public void mhf$setMouthAmmo(int kind) { dataTracker.set(MHF_MOUTH_AMMO, kind); }
 
 	protected LivingEntityMixin(EntityType<?> type, World world) {
 		super(type, world);
 	}
 
-	@Inject(method = "tick", at = @At("HEAD"))
+	@Inject(method = "tick", at = @At("HEAD"), cancellable = true)
 	private void mhf$tickStun(CallbackInfo ci) {
 		if (!getWorld().isClient() && mhf$headShakeTicks() > 0) mhf$setHeadShakeTicks(mhf$headShakeTicks() - 1);
 		com.nakami.mcheadfunction.wear.GoatCharge.tickTarget((LivingEntity) (Object) this);
+		com.nakami.mcheadfunction.wear.FrogMouth.tickMob((LivingEntity) (Object) this);
 		if (!getWorld().isClient() && mhf$crushTicks() > 0) {
 			dataTracker.set(MHF_CRUSH, mhf$crushTicks() - 1);
 			setVelocity(getVelocity().multiply(0.15, 1, 0.15));
+		}
+		// Client: skip travel, cramming and fire particles so a mouthful cannot sit in front of the camera.
+		if (getWorld().isClient() && mhf$mouthHolder() >= 0) {
+			LivingEntity self = (LivingEntity) (Object) this;
+			if (self.hurtTime > 0) self.hurtTime--;
+			self.age++;
+			ci.cancel();
 		}
 	}
 
 	@Inject(method = "dropXp", at = @At("HEAD"), cancellable = true)
 	private void mhf$noMealExperience(Entity attacker, CallbackInfo ci) {
 		if (com.nakami.mcheadfunction.haunt.HauntMeal.capturing(this)) ci.cancel();
+	}
+
+	/** A mob inside a frog mouth must not block the wearer's crosshair or shove the wearer. */
+	@Inject(method = "canHit", at = @At("HEAD"), cancellable = true)
+	private void mhf$mouthNoHit(CallbackInfoReturnable<Boolean> cir) {
+		if (mhf$mouthHolder() >= 0) cir.setReturnValue(false);
+	}
+
+	@Inject(method = "isPushable", at = @At("HEAD"), cancellable = true)
+	private void mhf$mouthNoPush(CallbackInfoReturnable<Boolean> cir) {
+		if (mhf$mouthHolder() >= 0) cir.setReturnValue(false);
 	}
 
 	@Inject(method = "jump", at = @At("HEAD"), cancellable = true)
@@ -89,6 +121,9 @@ public abstract class LivingEntityMixin extends Entity implements com.nakami.mch
 		builder.add(MHF_CRUSH, 0);
 		builder.add(MHF_HAUNT_DANCE, false);
 		builder.add(MHF_HAUNT_RISE, 0);
+		builder.add(MHF_MOUTH_HELD, -1);
+		builder.add(MHF_MOUTH_AMMO, 0);
+		builder.add(MHF_MOUTH_HOLDER, -1);
 	}
 
 	@Override
@@ -127,6 +162,10 @@ public abstract class LivingEntityMixin extends Entity implements com.nakami.mch
 	@Inject(method = "damage", at = @At("HEAD"), cancellable = true)
 	private void mhf$beforeDamage(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
 		LivingEntity self = (LivingEntity) (Object) this;
+        if (source.getAttacker() instanceof LivingEntity attacker && com.nakami.mcheadfunction.creeper.FearSystem.pacified(attacker)) {
+            cir.setReturnValue(false);
+            return;
+        }
 		if (self instanceof net.minecraft.entity.passive.VillagerEntity villager
 			&& com.nakami.mcheadfunction.haunt.HauntVillagers.shouldConvert(villager, source)
 			&& com.nakami.mcheadfunction.haunt.HauntVillagers.convert(villager)) {
@@ -139,7 +178,7 @@ public abstract class LivingEntityMixin extends Entity implements com.nakami.mch
 				cir.setReturnValue(false);
 				return;
 			}
-			if (WearHandler.tryEndermanDodge(player)) {
+			if (WearHandler.tryEndermanDodge(player, source)) {
 				cir.setReturnValue(false);
 				return;
 			}
@@ -191,6 +230,14 @@ public abstract class LivingEntityMixin extends Entity implements com.nakami.mch
 		}
 		return effect;
 	}
+
+    @Inject(method = "getHandSwingDuration", at = @At("RETURN"), cancellable = true)
+    private void mhf$zombieSwing(CallbackInfoReturnable<Integer> cir) {
+        if ((Object) this instanceof PlayerEntity player && com.nakami.mcheadfunction.wear.ZombieBlood.unarmed(player)) {
+            float speed = com.nakami.mcheadfunction.wear.ZombieBlood.handSpeedMultiplier(player);
+            cir.setReturnValue(Math.max(2, Math.round(cir.getReturnValueI() / speed)));
+        }
+    }
 
 	@Inject(method = "getMovementSpeed", at = @At("RETURN"), cancellable = true)
 	private void mhf$foxSneak(CallbackInfoReturnable<Float> cir) {

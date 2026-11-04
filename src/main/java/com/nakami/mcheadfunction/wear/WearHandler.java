@@ -71,6 +71,7 @@ public final class WearHandler {
 			applyPassives(player, worn);
 			GoatCharge.tick(player);
 			PigSwallow.tick(player);
+			FrogMouth.tick(player);
 			RabbitMovement.tick(player);
 			CreeperLaunch.tick(player);
 			com.nakami.mcheadfunction.blaze.BlazeFire.tickPlayer(player);
@@ -175,15 +176,11 @@ public final class WearHandler {
 
 
 	public static FoodComponent foodForEating(PlayerEntity player, ItemStack stack, FoodComponent food) {
-		if (HeadLookups.worn(player) != HeadType.ZOMBIE || !stack.isOf(Items.ROTTEN_FLESH)) {
-			return food;
-		}
-		// Filter this meal only; preserve hunger from other sources and the item's components.
-		var effects = food.effects().stream()
-			.filter(entry -> !entry.effect().getEffectType().equals(StatusEffects.HUNGER)).toList();
-		return new FoodComponent(food.nutrition(), food.saturation(), food.canAlwaysEat(),
-			food.eatSeconds(), food.usingConvertsTo(), effects);
-	}
+        if (!ZombieBlood.active(player)) return food;
+        var effects = food.effects().stream()
+            .filter(entry -> !stack.isOf(Items.ROTTEN_FLESH) || !entry.effect().getEffectType().equals(StatusEffects.HUNGER)).toList();
+        return new FoodComponent(0, 0, food.canAlwaysEat(), food.eatSeconds(), food.usingConvertsTo(), effects);
+    }
 
 	public static void onEat(PlayerEntity player, ItemStack stack, FoodComponent food) {
 		HeadType worn = HeadLookups.worn(player);
@@ -192,8 +189,6 @@ public final class WearHandler {
 			if (stack.isOf(Items.ROTTEN_FLESH)) {
 				player.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, 200, 0));
 				player.addStatusEffect(new StatusEffectInstance(StatusEffects.HASTE, 200, 0));
-				player.heal(2.0F);
-				if (player.getWorld() instanceof ServerWorld world) world.spawnParticles(ParticleTypes.HEART, player.getX(), player.getEyeY(), player.getZ(), 3, 0.3, 0.2, 0.3, 0);
 			} else if (food != null) {
 				player.addStatusEffect(new StatusEffectInstance(StatusEffects.POISON, 60, 0));
 			}
@@ -208,13 +203,7 @@ public final class WearHandler {
 
 	public static void onDealtDamage(ServerPlayerEntity player, LivingEntity victim, float amount, boolean killed, boolean melee) {
 		HeadType worn = HeadLookups.worn(player);
-		if (worn == HeadType.ZOMBIE && melee && amount > 0) {
-			player.heal(amount * (HeadMastery.mastered(player, HeadType.ZOMBIE) ? 0.20F : 0.10F));
-			HeadMastery.practice(player, worn);
-			if (killed) {
-				player.heal(6.0F);
-			}
-		}
+		ZombieBlood.hit(player, victim, amount, killed, melee);
 		if (worn == HeadType.IRON_GOLEM && melee && amount > 0) HeadMastery.practice(player, worn);
 		if (worn == HeadType.WOLF) {
 			HeadMastery.practice(player, worn);
@@ -234,8 +223,9 @@ public final class WearHandler {
 		victim.addStatusEffect(new StatusEffectInstance(StatusEffects.GLOWING, HeadMastery.mastered(player, HeadType.WOLF) ? 400 : 200, 0, true, false, false));
 	}
 
-	public static boolean tryEndermanDodge(ServerPlayerEntity player) {
-		if (HeadLookups.worn(player) != HeadType.ENDERMAN) {
+	public static boolean tryEndermanDodge(ServerPlayerEntity player, net.minecraft.entity.damage.DamageSource source) {
+		if (HeadLookups.worn(player) != HeadType.ENDERMAN
+			|| source.isOf(net.minecraft.entity.damage.DamageTypes.IN_WALL)) {
 			return false;
 		}
 		PlayerHeadState state = PlayerHeadAccess.state(player);
@@ -249,10 +239,17 @@ public final class WearHandler {
 			double z = player.getZ() + Math.sin(yaw) * distance;
 			double y = player.getY();
 			Vec3d origin = player.getPos();
-			if (player.teleport(x, y, z, true)) {
+			var world = player.getServerWorld();
+			var destination = net.minecraft.util.math.BlockPos.ofFloored(x, y, z);
+			Box destinationBox = player.getBoundingBox().offset(x - player.getX(), 0, z - player.getZ());
+			if (y >= world.getBottomY() && destinationBox.maxY <= world.getTopY()
+				&& world.isChunkLoaded(destination) && world.getWorldBorder().contains(destinationBox)) {
+				// The random dodge can embed the player in terrain; do not use safe teleport.
+				player.requestTeleport(x, y, z);
 				HeadEffects.burst(player.getServerWorld(), origin, HeadType.ENDERMAN);
 				HeadEffects.burst(player.getServerWorld(), player.getPos(), HeadType.ENDERMAN);
-				state.endermanDodgeCooldown = HeadMastery.mastered(player, HeadType.ENDERMAN) ? 60 : HeadRules.ENDERMAN_DODGE_COOLDOWN_TICKS;
+				state.endermanDodgeCooldown = HeadMastery.mastered(player, HeadType.ENDERMAN)
+					? HeadRules.ENDERMAN_MASTERED_DODGE_COOLDOWN_TICKS : HeadRules.ENDERMAN_DODGE_COOLDOWN_TICKS;
 				HeadMastery.practice(player, HeadType.ENDERMAN);
 				player.getWorld().playSound(null, player.getBlockPos(), net.minecraft.sound.SoundEvents.ENTITY_ENDERMAN_TELEPORT, player.getSoundCategory(), 1.0F, 1.0F);
 				return true;

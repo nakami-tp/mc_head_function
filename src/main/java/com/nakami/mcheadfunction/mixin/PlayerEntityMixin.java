@@ -81,6 +81,7 @@ public abstract class PlayerEntityMixin implements PlayerHeadAccess, PigStuffedA
 	@Inject(method = "attack", at = @At("HEAD"), cancellable = true)
 	private void mhf$attack(Entity target, CallbackInfo ci) {
 		PlayerEntity self = (PlayerEntity) (Object) this;
+        com.nakami.mcheadfunction.wear.ZombieBlood.updateAttributes(self);
 		if (com.nakami.mcheadfunction.wear.GoatCharge.isStunned(self)) { ci.cancel(); return; }
 		if (self.getWorld().isClient()) {
 			return;
@@ -93,6 +94,31 @@ public abstract class PlayerEntityMixin implements PlayerHeadAccess, PigStuffedA
 			ci.cancel();
 		}
 	}
+
+    @Inject(method = "tick", at = @At("HEAD"))
+    private void mhf$zombieTick(CallbackInfo ci) {
+        com.nakami.mcheadfunction.wear.ZombieBlood.tick((PlayerEntity) (Object) this);
+    }
+
+    @Inject(method = "getBlockBreakingSpeed", at = @At("RETURN"), cancellable = true)
+    private void mhf$zombieMining(net.minecraft.block.BlockState state,
+            org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Float> cir) {
+        float multiplier = com.nakami.mcheadfunction.wear.ZombieBlood.handSpeedMultiplier((PlayerEntity) (Object) this);
+        if (multiplier > 1) cir.setReturnValue(cir.getReturnValueF() * multiplier);
+    }
+
+    @WrapMethod(method = "applyDamage")
+    private void mhf$zombiePlayerVictim(net.minecraft.entity.damage.DamageSource source, float amount,
+            Operation<Void> original) {
+        PlayerEntity self = (PlayerEntity) (Object) this;
+        float before = self.getHealth();
+        original.call(source, amount);
+        if (source.getAttacker() instanceof net.minecraft.server.network.ServerPlayerEntity attacker) {
+            boolean melee = source.isOf(net.minecraft.entity.damage.DamageTypes.PLAYER_ATTACK);
+            com.nakami.mcheadfunction.wear.ZombieBlood.hit(attacker, self,
+                Math.max(0, before - self.getHealth()), !self.isAlive(), melee);
+        }
+    }
 
 	@WrapMethod(method = "eatFood")
 	private ItemStack mhf$eat(World world, ItemStack stack, FoodComponent food, Operation<ItemStack> original) {

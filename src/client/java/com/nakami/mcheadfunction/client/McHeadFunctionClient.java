@@ -25,8 +25,24 @@ public class McHeadFunctionClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+        ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.ZombieBiteS2CPayload.ID,
+            (payload, context) -> context.client().execute(() -> ZombieBloodEffects.receive(context.client(), payload)));
+        ClientTickEvents.END_CLIENT_TICK.register(ZombieBloodEffects::tick);
+        ClientTickEvents.END_CLIENT_TICK.register(ZombieFrenzyEffects::tick);
+        net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register(ZombieBloodEffects::renderHud);
+        WorldRenderEvents.AFTER_ENTITIES.register(ZombieBloodEffects::afterEntities);
 		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.BlazeFlameS2CPayload.ID,
 			(payload, context) -> context.client().execute(() -> BlazeBreathEffects.receive(context.client(), payload)));
+		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.BlazeLookS2CPayload.ID,
+			(payload, context) -> context.client().execute(() -> {
+				var world = context.client().world;
+				if (world != null && world.getEntityById(payload.source()) instanceof net.minecraft.entity.player.PlayerEntity player) {
+					var state = com.nakami.mcheadfunction.head.PlayerHeadAccess.state(player);
+					state.blazeHeat = payload.heat();
+					state.blazeCooldown = payload.cooldown();
+				}
+			}));
+		ClientTickEvents.END_CLIENT_TICK.register(BlazeHeadAppearance::tick);
 		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.GoatChargeS2CPayload.ID,
 			(payload, context) -> context.client().execute(() -> GoatChargeControl.receive(payload)));
 		ClientTickEvents.END_CLIENT_TICK.register(client -> GoatChargeControl.tick());
@@ -73,7 +89,14 @@ public class McHeadFunctionClient implements ClientModInitializer {
 				}
 			}));
 		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.HeadStatusS2CPayload.ID,
-			(payload, context) -> context.client().execute(() -> HeadHud.status = payload));
+			(payload, context) -> context.client().execute(() -> {
+				HeadHud.status = payload;
+				if (context.client().player != null) {
+					var state = com.nakami.mcheadfunction.head.PlayerHeadAccess.state(context.client().player);
+					state.blazeHeat = payload.blazeHeat();
+					state.blazeCooldown = payload.blazeCooldown();
+				}
+			}));
 		net.fabricmc.fabric.api.client.item.v1.ItemTooltipCallback.EVENT.register((stack, context, tooltipType, lines) -> {
 			var type = com.nakami.mcheadfunction.head.HeadItems.ofStack(stack);
 			if (type != null) {
@@ -105,8 +128,10 @@ public class McHeadFunctionClient implements ClientModInitializer {
 			}
 		});
 		ClientTickEvents.END_CLIENT_TICK.register(new SkillKeyTracker());
+        ClientTickEvents.END_CLIENT_TICK.register(CreeperCookingControl::tick);
 		WorldRenderEvents.AFTER_ENTITIES.register(SonarWorldRender::afterEntities);
 		ClientTickEvents.END_CLIENT_TICK.register(PigSwallowEffects::tick);
+		ClientTickEvents.END_CLIENT_TICK.register(FrogMouthEffects::tick);
 		ClientTickEvents.END_CLIENT_TICK.register(HauntPumpkinEffects::tick);
 		WorldRenderEvents.AFTER_ENTITIES.register(HauntPumpkinEffects::afterEntities);
 		ClientTickEvents.END_CLIENT_TICK.register(HauntFurnaceEffects::tick);

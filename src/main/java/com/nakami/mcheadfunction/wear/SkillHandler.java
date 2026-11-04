@@ -49,7 +49,9 @@ public final class SkillHandler {
 			case GOAT -> GoatCharge.toggle(player);
 			case RABBIT -> RabbitMovement.reset(player);
 			case BEE -> BeeCommand.command(player, rayEntity(player, 24));
-			case FROG -> grab(player, state);
+			case FROG -> {
+				if (!FrogMouth.spit(player)) grab(player, state);
+			}
 			case LLAMA -> spit(player, state);
 			default -> {
 			}
@@ -122,8 +124,9 @@ public final class SkillHandler {
 			FrogTongueEntity.class, player.getBoundingBox().expand(32),
 			tongue -> tongue.owner() == player).isEmpty()) return;
 		HitResult hit = rayAnything(player, HeadRules.FROG_RANGE);
-		if (hit.getType() == HitResult.Type.MISS) return;
-		state.frogCooldown = FrogTongueEntity.DURATION
+		if (hit.getType() == HitResult.Type.MISS) {
+			state.frogCooldown = FrogTongueEntity.DURATION + FrogProjectile.cooldown(player);
+		} else state.frogCooldown = FrogTongueEntity.DURATION
 			+ (HeadMastery.mastered(player, HeadType.FROG) ? 10 : HeadRules.FROG_COOLDOWN_TICKS);
 		player.getServerWorld().spawnEntity(new FrogTongueEntity(player, hit));
 		HeadSounds.play(player, SoundEvents.ENTITY_FROG_TONGUE, 1.6F, 1.1F);
@@ -158,7 +161,7 @@ public final class SkillHandler {
 		EntityHitResult best = null;
 		double bestDist = Double.MAX_VALUE;
 		for (Entity entity : player.getWorld().getOtherEntities(player, box)) {
-			if (entity.isSpectator() || entity instanceof FrogTongueEntity) continue;
+			if (entity.isSpectator() || entity instanceof FrogTongueEntity || FrogMouth.isHeld(entity)) continue;
 			if (HeadLookups.worn(player) == HeadType.BEE && entity instanceof net.minecraft.entity.passive.BeeEntity
 				&& entity.getCommandTags().contains("mhf_owner:" + player.getUuid())) continue;
 			if (entity instanceof LivingEntity living && HeadlessAccess.isHeadless(living)) {

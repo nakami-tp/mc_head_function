@@ -47,6 +47,10 @@ import net.minecraft.world.World;
 
 public class ThrownHeadEntity extends ThrownItemEntity {
 	private static final TrackedData<String> HEAD_TYPE = DataTracker.registerData(ThrownHeadEntity.class, TrackedDataHandlerRegistry.STRING);
+	private static final TrackedData<Integer> FUSE = DataTracker.registerData(ThrownHeadEntity.class, TrackedDataHandlerRegistry.INTEGER);
+    private static final TrackedData<Boolean> COOKING = DataTracker.registerData(ThrownHeadEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
+    private int cookingSlot;
+
 	private static final TrackedData<Boolean> ACTIVE = DataTracker.registerData(ThrownHeadEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
 
 	private static final TrackedData<Integer> BITE_TICKS = DataTracker.registerData(ThrownHeadEntity.class, TrackedDataHandlerRegistry.INTEGER);
@@ -107,6 +111,7 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 		super(ModEntities.THROWN_HEAD, owner, world);
 		setHeadType(type);
 		this.style = style;
+        if (style == HeadType.ThrowStyle.CREEPER_BLAST) dataTracker.set(FUSE, com.nakami.mcheadfunction.creeper.CreeperCooking.FUSE_TICKS);
 		if (style == HeadType.ThrowStyle.GOLEM_ROLL) rollDirection = Vec3d.fromPolar(0, owner.getYaw());
 		setItem(new ItemStack(HeadItems.item(type)));
 	}
@@ -122,6 +127,8 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 		super.initDataTracker(builder);
 		builder.add(HEAD_TYPE, HeadType.PIG.name());
 		builder.add(ACTIVE, false);
+        builder.add(FUSE, -1);
+        builder.add(COOKING, false);
 		builder.add(BITE_TICKS, 0);
 		builder.add(ROLL_DISTANCE, 0F);
 		builder.add(ROLL_YAW, 0F);
@@ -138,6 +145,67 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 			return HeadType.PIG;
 		}
 	}
+
+	public boolean isGrenade() { return dataTracker.get(FUSE) >= 0; }
+    public boolean isCooking() { return dataTracker.get(COOKING); }
+    public int fuseTicks() { return dataTracker.get(FUSE); }
+
+    public void startCooking(int slot) {
+        cookingSlot = slot;
+        dataTracker.set(COOKING, true);
+        setNoGravity(true);
+        setVelocity(Vec3d.ZERO);
+    }
+
+    public void releaseCookedHead() {
+        if (!isCooking()) return;
+        dataTracker.set(COOKING, false);
+        setNoGravity(false);
+        if (getOwner() instanceof LivingEntity owner && owner.getWorld() == getWorld()) {
+            var look = owner.getRotationVec(1);
+            setPosition(owner.getEyePos().add(look.multiply(0.5)).add(0, -0.15, 0));
+            setVelocity(look.multiply(1.2));
+            HeadSounds.launch(owner, HeadType.CREEPER);
+        }
+        velocityDirty = true;
+    }
+
+    private void tickGrenade() {
+        baseTick();
+        if (isInLava() || getY() < getWorld().getBottomY() - 16) { discard(); return; }
+        if (isCooking()) {
+            if (getOwner() instanceof net.minecraft.entity.player.PlayerEntity player && player.isAlive()
+                && !player.isRemoved() && !player.isSpectator() && player.getWorld() == getWorld()
+                && player.getInventory().selectedSlot == cookingSlot) {
+                var look = player.getRotationVec(1);
+                var side = Vec3d.fromPolar(0, player.getYaw() + 90).multiply(player.getMainArm() == net.minecraft.util.Arm.RIGHT ? 0.35 : -0.35);
+                setPosition(player.getEyePos().add(look.multiply(0.55)).add(side).add(0, -0.45, 0));
+                setVelocity(Vec3d.ZERO);
+                if (player instanceof ServerPlayerEntity serverPlayer) com.nakami.mcheadfunction.creeper.FearSystem.expose(serverPlayer);
+            } else if (!getWorld().isClient()) releaseCookedHead();
+        } else {
+            applyGravity();
+            move(MovementType.SELF, getVelocity());
+            Vec3d velocity = getVelocity();
+            setVelocity(horizontalCollision ? new Vec3d(0, velocity.y, 0) : velocity.multiply(0.98, 1, 0.98));
+            if (isOnGround()) setVelocity(getVelocity().multiply(0.65, 0, 0.65));
+        }
+        if (getWorld().isClient()) {
+            if (fuseTicks() % 3 == 0) getWorld().addParticle(ParticleTypes.SMOKE, getX(), getY() + 0.45, getZ(), 0, 0.025, 0);
+            return;
+        }
+        int remaining = fuseTicks() - 1;
+        dataTracker.set(FUSE, Math.max(0, remaining));
+        int interval = remaining < 15 ? 3 : remaining < 30 ? 6 : 12;
+        if (remaining > 0 && remaining % interval == 0) HeadSounds.play(this, SoundEvents.BLOCK_DISPENSER_FAIL, 0.35F, 0.8F + (60 - remaining) / 60F);
+        if (remaining <= 0) {
+            practice();
+            var world = (ServerWorld) getWorld();
+            world.createExplosion(this, world.getDamageSources().explosion(this, getOwner()),
+                new net.minecraft.world.explosion.ExplosionBehavior(), getX(), getY(), getZ(), 3, false, World.ExplosionSourceType.TNT);
+            recycle();
+        }
+    }
 
 	public int getBiteTicks() { return dataTracker.get(BITE_TICKS); }
 
@@ -169,7 +237,8 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 		if (recycled) {
 			return;
 		}
-		previousRollDistance = dataTracker.get(ROLL_DISTANCE);
+		if (isGrenade()) { tickGrenade(); return; }
+        previousRollDistance = dataTracker.get(ROLL_DISTANCE);
 		if (getWorld().isClient() && age % 2 == 0) {
 			getWorld().addParticle(HeadEffects.particle(getHeadType()), getX(), getY() + 0.2, getZ(), 0, 0.015, 0);
 		}
@@ -717,7 +786,8 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 	@Override
 	public void writeCustomDataToNbt(NbtCompound nbt) {
 		super.writeCustomDataToNbt(nbt);
-		nbt.putString("headType", getHeadType().name());
+		nbt.putInt("creeperFuse", fuseTicks());
+        nbt.putString("headType", getHeadType().name());
 		nbt.putString("style", style.name());
 		nbt.putBoolean("active", isActive());
 		nbt.putBoolean("practiced", practiced);
@@ -749,7 +819,11 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 	@Override
 	public void readCustomDataFromNbt(NbtCompound nbt) {
 		super.readCustomDataFromNbt(nbt);
-		if (nbt.contains("headType")) {
+		dataTracker.set(FUSE, nbt.contains("creeperFuse") ? Math.clamp(nbt.getInt("creeperFuse"), -1, 60) : -1);
+        // A saved lit head resumes as a loose grenade, never as a stale hand reservation.
+        dataTracker.set(COOKING, false);
+        if (dataTracker.get(FUSE) >= 0) setNoGravity(false);
+        if (nbt.contains("headType")) {
 			setHeadType(HeadType.valueOf(nbt.getString("headType")));
 		}
 		if (nbt.contains("style")) {

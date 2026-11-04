@@ -8,6 +8,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.*;
 import net.minecraft.entity.data.*;
+import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
@@ -33,6 +34,7 @@ public final class FrogTongueEntity extends Entity {
 	private Vec3d contact = Vec3d.ZERO;
 	private final List<ItemStack> cargo = new ArrayList<>();
 	private boolean restored;
+	private boolean latchedMob;
 
 	public FrogTongueEntity(EntityType<? extends FrogTongueEntity> type, World world) { super(type, world); noClip = true; }
 	public FrogTongueEntity(ServerPlayerEntity player, HitResult hit) {
@@ -41,7 +43,7 @@ public final class FrogTongueEntity extends Entity {
 		dataTracker.set(OWNER, player.getId());
 		contact = hit.getPos();
 		if (hit instanceof EntityHitResult e) target = e.getEntity();
-		if (hit instanceof BlockHitResult b) {
+		if (hit instanceof BlockHitResult b && hit.getType() != HitResult.Type.MISS) {
 			blockPos = b.getBlockPos(); originalBlock = getWorld().getBlockState(blockPos);
 		}
 		setPosition(mouth(player, 1));
@@ -65,6 +67,7 @@ public final class FrogTongueEntity extends Entity {
 			|| HeadLookups.worn(owner) != HeadType.FROG || owner.squaredDistanceTo(this) > 32 * 32) {
 			release(); return;
 		}
+		Vec3d previousTip = getPos();
 		int time = elapsed() + 1;
 		dataTracker.set(CLOCK, time);
 		if (target != null && !target.isRemoved()) contact = target.getBoundingBox().getCenter();
@@ -84,12 +87,26 @@ public final class FrogTongueEntity extends Entity {
 				setPosition(living.getBoundingBox().getCenter());
 			}
 		}
+		if (time <= EXTEND || time > EXTEND + HOLD) {
+			var sweep = new Box(previousTip, getPos()).expand(com.nakami.mcheadfunction.rule.HeadRules.FROG_INTERCEPT_RADIUS);
+			var projectiles = world.getEntitiesByClass(net.minecraft.entity.projectile.ProjectileEntity.class, sweep,
+				p -> com.nakami.mcheadfunction.wear.FrogProjectile.supported(p));
+			projectiles.sort(java.util.Comparator.comparingDouble(p -> p.squaredDistanceTo(previousTip)));
+			for (var projectile : projectiles) {
+				Box bounds = projectile.getBoundingBox().expand(com.nakami.mcheadfunction.rule.HeadRules.FROG_INTERCEPT_RADIUS);
+				if ((bounds.contains(previousTip) || bounds.raycast(previousTip, getPos()).isPresent())
+					&& com.nakami.mcheadfunction.wear.FrogProjectile.capture(owner, projectile)) { release(); return; }
+			}
+		}
 		if (time == EXTEND) HeadSounds.play(this, SoundEvents.BLOCK_SLIME_BLOCK_HIT, 0.6F, 1.35F);
 		if (time == EXTEND + HOLD) {
 			latch(world);
 			HeadSounds.play(owner, SoundEvents.ENTITY_SLIME_SQUISH_SMALL, 0.45F, 0.85F);
 		}
 		if (time >= DURATION) {
+			if (latchedMob && target instanceof MobEntity mob && com.nakami.mcheadfunction.wear.FrogMouth.canSwallow(owner, mob)) {
+				com.nakami.mcheadfunction.wear.FrogMouth.swallow(owner, mob);
+			}
 			for (ItemStack stack : cargo) if (!owner.getInventory().insertStack(stack)) owner.dropItem(stack, false);
 			cargo.clear();
 			HeadSounds.play(owner, SoundEvents.ENTITY_FROG_EAT, 0.45F, 1.2F);
@@ -100,13 +117,15 @@ public final class FrogTongueEntity extends Entity {
 		if (blockPos != null && world.getBlockState(blockPos).equals(originalBlock)
 			&& !originalBlock.isAir() && originalBlock.getHardness(world, blockPos) >= 0
 			&& world.canPlayerModifyAt(owner, blockPos) && owner.canModifyBlocks()) {
+			// Empty-hand harvest only: a poke leaves tool-required blocks in place.
+			if (originalBlock.isToolRequired()) return;
 			var blockEntity = world.getBlockEntity(blockPos);
 			// Empty containers before computing drops, including shulker-box contents.
 			if (blockEntity instanceof Inventory inventory) {
 				HeadMastery.challenge(owner, "frog_unpack");
 				for (int i = 0; i < inventory.size(); i++) cargo.add(inventory.removeStack(i));
 			}
-			if (!originalBlock.isToolRequired()) cargo.addAll(Block.getDroppedStacks(originalBlock, world, blockPos, blockEntity, owner, ItemStack.EMPTY));
+			cargo.addAll(Block.getDroppedStacks(originalBlock, world, blockPos, blockEntity, owner, ItemStack.EMPTY));
 			world.removeBlock(blockPos, false);
 			dataTracker.set(BLOCK, Block.getRawIdFromState(originalBlock));
 			HeadMastery.practice(owner, HeadType.FROG);
@@ -114,6 +133,7 @@ public final class FrogTongueEntity extends Entity {
 			cargo.add(item.getStack().copy()); dataTracker.set(ITEM, item.getStack().copy()); item.discard();
 			HeadMastery.practice(owner, HeadType.FROG);
 		} else if (target instanceof LivingEntity living && living.isAlive() && !HeadLookups.isBoss(living)) {
+			latchedMob = true;
 			HeadMastery.practice(owner, HeadType.FROG);
 		}
 	}

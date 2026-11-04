@@ -85,6 +85,39 @@ class HeadRulesTest {
 	}
 
 	@Test
+	void frogChewsEveryHalfSecond() {
+		assertFalse(HeadRules.frogChewsThisTick(0));
+		assertFalse(HeadRules.frogChewsThisTick(9));
+		assertTrue(HeadRules.frogChewsThisTick(10));
+		assertFalse(HeadRules.frogChewsThisTick(11));
+		assertTrue(HeadRules.frogChewsThisTick(20));
+	}
+
+	@Test
+	void frogMouthShrinksAsTheMealIsDigested() {
+		float full = HeadRules.frogMouthSize(0.6F, 1.95F, 1);
+		float empty = HeadRules.frogMouthSize(0.6F, 1.95F, 0);
+		assertTrue(full > empty);
+		assertEquals(full * 0.78F, empty, 0.001F);
+		assertTrue(HeadRules.frogMouthSize(2.0F, 2.0F, 1) > HeadRules.frogMouthSize(0.4F, 0.7F, 1));
+	}
+
+	@Test
+	void frogChewSnapsHarderOnABite() {
+		float idle = HeadRules.frogChew(1, 0, false);
+		float bite = HeadRules.frogChew(1, 10, false);
+		assertTrue(bite > idle);
+		assertEquals(idle + 0.12F, bite, 0.001F);
+		assertTrue(Math.abs(HeadRules.frogChew(1, 0, true)) > Math.abs(idle));
+	}
+
+	@Test
+	void frogChewCameraNodsOnABite() {
+		assertTrue(HeadRules.frogChewPitch(0, 10) > HeadRules.frogChewPitch(0, 0));
+		assertTrue(HeadRules.frogChewPitch(0, 10) < 4);
+	}
+
+	@Test
 	void connectedCollectIgnoresVisitedAirWhenCapping() {
 		record Cell(int x, int y) {
 		}

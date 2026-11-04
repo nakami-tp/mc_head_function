@@ -32,7 +32,7 @@ public final class BeheadingClientValidation implements ClientModInitializer {
     private static int hiddenFrames, visibleFrames, wrongFrames, shakeFrames, gloveHiddenFrames;
     public static boolean sideView;
     public static int flatGloveFrames;
-    private static int rightArmFrames, leftArmFrames, thirdPersonPunchFrames;
+    private static int rightArmFrames, leftArmFrames, thirdPersonPunchFrames, vanillaSwingFrames;
     private static float minArmZ = Float.POSITIVE_INFINITY, maxArmZ = Float.NEGATIVE_INFINITY;
     private static float minRightX = Float.POSITIVE_INFINITY, maxRightX = Float.NEGATIVE_INFINITY;
     private final java.util.List<String> punches = new java.util.ArrayList<>();
@@ -41,7 +41,8 @@ public final class BeheadingClientValidation implements ClientModInitializer {
     private double maxFlightZ;
 
     public static void observeArm(net.minecraft.util.Arm arm, float equip, float swing, float x, float z) {
-        check(swing == 0 && equip == 0, "Glove must not use the vanilla sideways swing or cooldown dip");
+        check(swing >= 0 && swing <= 1 && equip >= 0 && equip <= 1, "Invalid vanilla animation progress");
+        if (swing > 0) vanillaSwingFrames++;
         if (arm == net.minecraft.util.Arm.RIGHT) rightArmFrames++; else leftArmFrames++;
         if (arm == net.minecraft.util.Arm.RIGHT) { minRightX = Math.min(minRightX, x); maxRightX = Math.max(maxRightX, x); }
         minArmZ = Math.min(minArmZ, z); maxArmZ = Math.max(maxArmZ, z);
@@ -125,7 +126,7 @@ public final class BeheadingClientValidation implements ClientModInitializer {
                     var target = (LivingEntity) world.getEntityById(targetId);
                     player.refreshPositionAndAngles(target.getX(), 101, -2, 0, 0);
                     player.setHeadYaw(0);
-                    player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+                    player.setStackInHand(Hand.MAIN_HAND, new ItemStack(com.nakami.mcheadfunction.head.HeadItems.BEHEADING_GLOVE));
                     float health = target.getHealth();
                     player.attack(target); player.attack(target); player.attack(target);
                     check(HeadlessAccess.isHeadless(target), "Three head hits failed: eye=" + player.getEyePos() + " look=" + player.getRotationVec(1) + " box=" + target.getBoundingBox());
@@ -199,8 +200,8 @@ public final class BeheadingClientValidation implements ClientModInitializer {
             if (ticks == 193) client.player.swingHand(Hand.MAIN_HAND);
             if (ticks == 205) {
                 check(flatGloveFrames == 0, "Glove still rendered as a held flat item");
-                check(rightArmFrames > 20 && leftArmFrames > 10 && maxArmZ - minArmZ > 0.25F, "Missing fist animation or handedness: " + rightArmFrames + "/" + leftArmFrames + " depth=" + (maxArmZ-minArmZ));
-                check(maxRightX - minRightX > 0.20F && maxRightX - minRightX < 0.40F, "Jab must stay on its own side instead of sweeping across the screen: " + (maxRightX-minRightX));
+                check(rightArmFrames > 20 && leftArmFrames > 10 && vanillaSwingFrames > 10,
+                    "Glove must use vanilla swing progress with either main arm");
                 check(thirdPersonPunchFrames > 3, "Third-person arm did not punch forward");
                 onServer(client, () -> {
                     var world = client.getServer().getOverworld();
@@ -216,7 +217,7 @@ public final class BeheadingClientValidation implements ClientModInitializer {
             }
             if (ticks == 230) ScreenshotRecorder.saveScreenshot(client.runDirectory, "golem-clean-neck.png", client.getFramebuffer(), m -> {});
             if (ticks == 235) finish(client, "PASS hiddenFrames=" + hiddenFrames + " intactFrames=" + visibleFrames + " shakeFrames=" + shakeFrames + " gloveHiddenFrames=" + gloveHiddenFrames
-                + " jabLateralRange=" + (maxRightX-minRightX) + " rightArmFrames=" + rightArmFrames + " leftArmFrames=" + leftArmFrames + " thirdPersonPunchFrames=" + thirdPersonPunchFrames + " flatGloveFrames=" + flatGloveFrames + " orderedPunchSounds=3 flightFrames=" + flightFrames + " maxFlightZ=" + maxFlightZ);
+                + " vanillaSwingFrames=" + vanillaSwingFrames + " lateralRange=" + (maxRightX-minRightX) + " rightArmFrames=" + rightArmFrames + " leftArmFrames=" + leftArmFrames + " thirdPersonPunchFrames=" + thirdPersonPunchFrames + " flatGloveFrames=" + flatGloveFrames + " orderedPunchSounds=3 flightFrames=" + flightFrames + " maxFlightZ=" + maxFlightZ);
         } catch (Throwable failure) { finish(client, "FAIL " + failure); }
     }
     private void camera(MinecraftClient client) {

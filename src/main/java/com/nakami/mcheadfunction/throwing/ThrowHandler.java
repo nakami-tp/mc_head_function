@@ -21,7 +21,12 @@ public final class ThrowHandler {
 		if (type == null) {
 			return;
 		}
-		if (type == HeadType.PIG) {
+		if (type == HeadType.CREEPER) {
+            com.nakami.mcheadfunction.creeper.CreeperCooking.input(player, true);
+            com.nakami.mcheadfunction.creeper.CreeperCooking.input(player, false);
+            return;
+        }
+        if (type == HeadType.PIG) {
 			com.nakami.mcheadfunction.wear.PigSwallow.trySwallow(player);
 			return;
 		}

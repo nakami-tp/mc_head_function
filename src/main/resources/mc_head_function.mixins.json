@@ -3,12 +3,15 @@
 	"package": "com.nakami.mcheadfunction.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
+        "CakeBlockMixin",
+        "CreeperFuseAccessor",
 		"EntityMixin",
 		"ItemMixin",
 		"LivingEntityMixin",
 		"LivingEntityDropInvoker",
 		"MobEntityMixin",
 		"PlayerEntityMixin",
+        "PlayerInventoryMixin",
 		"SculkSensorBlockEntityMixin",
 		"VillagerEntityMixin"
 	],

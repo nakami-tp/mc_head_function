@@ -9,10 +9,37 @@ import net.minecraft.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(Entity.class)
 public class EntityMixin {
+	@Inject(method = "pushAwayFrom", at = @At("HEAD"), cancellable = true)
+	private void mhf$mouthNoShove(Entity other, CallbackInfo ci) {
+		Entity self = (Entity) (Object) this;
+		if (com.nakami.mcheadfunction.wear.FrogMouth.isHeld(self) || com.nakami.mcheadfunction.wear.FrogMouth.isHeld(other)) {
+			ci.cancel();
+		}
+	}
+
+	@Inject(method = "collidesWith", at = @At("HEAD"), cancellable = true)
+	private void mhf$mouthNoCollide(Entity other, CallbackInfoReturnable<Boolean> cir) {
+		Entity self = (Entity) (Object) this;
+		if (com.nakami.mcheadfunction.wear.FrogMouth.isHeld(self) || com.nakami.mcheadfunction.wear.FrogMouth.isHeld(other)) {
+			cir.setReturnValue(false);
+		}
+	}
+
+	@Inject(method = "isCollidable", at = @At("HEAD"), cancellable = true)
+	private void mhf$mouthNoSolid(CallbackInfoReturnable<Boolean> cir) {
+		if (com.nakami.mcheadfunction.wear.FrogMouth.isHeld((Entity) (Object) this)) cir.setReturnValue(false);
+	}
+
+	@Inject(method = "doesRenderOnFire", at = @At("HEAD"), cancellable = true)
+	private void mhf$mouthNoFire(CallbackInfoReturnable<Boolean> cir) {
+		if (com.nakami.mcheadfunction.wear.FrogMouth.isHeld((Entity) (Object) this)) cir.setReturnValue(false);
+	}
+
 	@Inject(method = "dropStack(Lnet/minecraft/item/ItemStack;)Lnet/minecraft/entity/ItemEntity;", at = @At("HEAD"), cancellable = true)
 	private void mhf$noSecondHead(ItemStack stack, CallbackInfoReturnable<ItemEntity> cir) {
 		Entity self = (Entity) (Object) this;

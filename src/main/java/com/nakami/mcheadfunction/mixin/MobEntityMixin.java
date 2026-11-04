@@ -14,7 +14,27 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(MobEntity.class)
-public class MobEntityMixin {
+public class MobEntityMixin implements com.nakami.mcheadfunction.creeper.FearAccess {
+    @org.spongepowered.asm.mixin.Unique
+    private static final net.minecraft.entity.data.TrackedData<Integer> MHF_FEAR = net.minecraft.entity.data.DataTracker.registerData(MobEntity.class, net.minecraft.entity.data.TrackedDataHandlerRegistry.INTEGER);
+    @org.spongepowered.asm.mixin.Unique
+    private final com.nakami.mcheadfunction.creeper.FearState mhf$fear = new com.nakami.mcheadfunction.creeper.FearState();
+    @Override public com.nakami.mcheadfunction.creeper.FearState mhf$fear() { return mhf$fear; }
+    @Override public int mhf$fearLevel() { return ((MobEntity) (Object) this).getDataTracker().get(MHF_FEAR); }
+    @Override public void mhf$setFearLevel(int level) { ((MobEntity) (Object) this).getDataTracker().set(MHF_FEAR, level); }
+
+    @Inject(method = "initDataTracker", at = @At("RETURN"))
+    private void mhf$initFear(net.minecraft.entity.data.DataTracker.Builder builder, CallbackInfo ci) { builder.add(MHF_FEAR, 0); }
+
+    @Inject(method = "tick", at = @At("HEAD"))
+    private void mhf$tickFear(CallbackInfo ci) { com.nakami.mcheadfunction.creeper.FearSystem.tick((MobEntity) (Object) this); }
+
+    @Inject(method = "writeCustomDataToNbt", at = @At("RETURN"))
+    private void mhf$writeFear(net.minecraft.nbt.NbtCompound nbt, CallbackInfo ci) { mhf$fear.write(nbt); }
+
+    @Inject(method = "readCustomDataFromNbt", at = @At("RETURN"))
+    private void mhf$readFear(net.minecraft.nbt.NbtCompound nbt, CallbackInfo ci) { mhf$fear.read(nbt); }
+
 	@Shadow
 	@Final
 	protected GoalSelector goalSelector;
@@ -26,7 +46,7 @@ public class MobEntityMixin {
 	@Inject(method = "setTarget", at = @At("HEAD"), cancellable = true)
 	private void mhf$noTarget(LivingEntity target, CallbackInfo ci) {
 		MobEntity self = (MobEntity) (Object) this;
-		if (target != null && HeadlessAccess.isHeadless(self)) {
+		if (target != null && (HeadlessAccess.isHeadless(self) || com.nakami.mcheadfunction.creeper.FearSystem.pacified(self))) {
 			ci.cancel();
 		}
 	}
@@ -35,7 +55,9 @@ public class MobEntityMixin {
 	private void mhf$headlessAi(CallbackInfo ci) {
 		MobEntity self = (MobEntity) (Object) this;
 		if (com.nakami.mcheadfunction.wear.GoatCharge.isStunned(self)) { ci.cancel(); return; }
-		if (HeadlessAccess.isHeadless(self)) {
+		if (com.nakami.mcheadfunction.wear.FrogMouth.isHeld(self)) { ci.cancel(); return; }
+		if (com.nakami.mcheadfunction.creeper.FearSystem.control(self)) { ci.cancel(); return; }
+        if (HeadlessAccess.isHeadless(self)) {
 			HeadlessAi.suppress(self, goalSelector, targetSelector);
 		}
 	}

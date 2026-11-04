@@ -12,11 +12,21 @@ import java.util.function.Predicate;
  * Numbers and predicates that do not need a live Minecraft world.
  */
 public final class HeadRules {
+	public static final int FROG_PARRY_COOLDOWN = 10, FROG_PARRY_MASTER_COOLDOWN = 4;
+	public static final int FROG_AMMO_HURT_INTERVAL = 10, FROG_AMMO_HOLD_TICKS = 60;
+	public static final double FROG_AMMO_SPEED_MULTIPLIER = 1.5, FROG_INTERCEPT_RADIUS = 0.5;
 	public static final int SHAKE_HITS = 3;
 	public static final long SHAKE_WINDOW_MS = 2000L;
 	public static final int ACTIVE_MAX_TICKS = 200;
 	public static final int FROG_RANGE = 16;
 	public static final int FROG_COOLDOWN_TICKS = 20;
+	public static final int FROG_MOUTH_BITE_TICKS = 10;
+	public static final float FROG_MOUTH_DAMAGE = 2.0F;
+	public static final int FROG_CREEPER_FUSE_TICKS = 60;
+	public static final int FROG_CREEPER_FLIGHT_TICKS = 60;
+	public static final double FROG_SPIT_SPEED = 1.6;
+	public static final double FROG_SPIT_LIFT = 0.25;
+	public static final int FROG_SPIT_COOLDOWN_TICKS = 10;
 	public static final int BEE_SUMMON_COUNT = 3;
 	public static final int SONAR_RANGE = 16;
 	public static final int SONAR_TICKS = 100;
@@ -24,7 +34,8 @@ public final class HeadRules {
 	public static final int LIGHTNING_CHARGE_TICKS = 100;
 	public static final int CREEPER_RECHARGE_TICKS = 100;
 	public static final int CREEPER_MAX_CHARGES = 2;
-	public static final int ENDERMAN_DODGE_COOLDOWN_TICKS = 100;
+	public static final int ENDERMAN_DODGE_COOLDOWN_TICKS = 40;
+	public static final int ENDERMAN_MASTERED_DODGE_COOLDOWN_TICKS = 20;
 	public static final double ENDERMAN_DODGE_DISTANCE = 8.0;
 	public static final int ENDERMAN_EAT_MAX = 16;
 	public static final int ENDERMAN_EAT_INTERVAL_TICKS = 5;
@@ -101,6 +112,34 @@ public final class HeadRules {
 
 	public static boolean shouldEatThisTick(int activeTicks) {
 		return activeTicks > 0 && activeTicks % ENDERMAN_EAT_INTERVAL_TICKS == 0;
+	}
+
+	public static boolean frogChewsThisTick(int mouthTicks) {
+		return mouthTicks > 0 && mouthTicks % FROG_MOUTH_BITE_TICKS == 0;
+	}
+
+	/** Worn frog head scale while a mouthful is held. Shrinks as the meal is digested. */
+	public static float frogMouthSize(float width, float height, float healthFraction) {
+		float bulk = 1.35F + 0.25F * Math.min(1F, width * height / 2.0F);
+		return bulk * (0.78F + 0.22F * Math.max(0F, Math.min(1F, healthFraction)));
+	}
+
+	/** Idle jaw wobble plus a bite snap. hurtTime is the vanilla 10-tick flash after a chew. */
+	public static float frogChew(float age, float hurtTime, boolean urgent) {
+		float speed = urgent ? 1.6F : 0.6F;
+		float idle = (float) Math.sin(age * speed) * (urgent ? 0.09F : 0.05F);
+		float bite = Math.max(0F, Math.min(1F, hurtTime / 10.0F));
+		return idle + bite * 0.12F;
+	}
+
+	/** First-person camera nod while digesting. Degrees, never large enough to fight aim. */
+	public static float frogChewPitch(float age, float hurtTime) {
+		float idle = (float) Math.sin(age * 0.8F) * 0.9F;
+		return idle + Math.max(0F, hurtTime) * 0.22F;
+	}
+
+	public static float frogChewYaw(float age, float hurtTime) {
+		return (float) Math.cos(age * 0.55F) * 0.35F + Math.max(0F, hurtTime) * 0.08F;
 	}
 
 	/**

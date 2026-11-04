@@ -24,12 +24,7 @@ public final class HeadHud {
 			return;
 		}
 		HeadType type = HeadLookups.worn(client.player);
-		if (type == null) {
-			return;
-		}
-
-		if (type == HeadType.BLAZE) {
-			renderBlaze(draw, client);
+		if (type == null || type == HeadType.BLAZE) {
 			return;
 		}
 		int remaining;
@@ -93,24 +88,6 @@ public final class HeadHud {
 			// Two segments make the two ammo charges visible without text or an icon.
 			draw.fill(x + 1, y + 9, x + 4, y + 10, 0xC0182028);
 		}
-	}
-	private static void renderBlaze(DrawContext draw, MinecraftClient client) {
-		int x = draw.getScaledWindowWidth() / 2 - 40;
-		int y = draw.getScaledWindowHeight() - 64;
-		boolean cooling = status.blazeCooldown() > 0;
-		boolean high = status.blazeHeat() >= com.nakami.mcheadfunction.blaze.BlazeFire.HIGH_HEAT;
-		int color = cooling ? 0xFF888888 : high ? 0xFFFFD45A : 0xFFFF792A;
-		float amount = cooling ? (float) status.blazeCooldown() / com.nakami.mcheadfunction.blaze.BlazeFire.COOLDOWN
-			: (float) status.blazeHeat() / com.nakami.mcheadfunction.blaze.BlazeFire.MAX_HEAT;
-		draw.fill(x - 1, y - 1, x + 81, y + 6, 0xCC20140D);
-		draw.fill(x, y, x + 80, y + 5, 0xFF503124);
-		draw.fill(x, y, x + Math.round(80 * amount), y + 5, color);
-		int marker = Math.round(80F * com.nakami.mcheadfunction.blaze.BlazeFire.HIGH_HEAT / com.nakami.mcheadfunction.blaze.BlazeFire.MAX_HEAT);
-		draw.fill(x + marker, y, x + marker + 1, y + 5, 0xCCFFFFFF);
-		var key = McHeadFunctionClient.SKILL_KEY.getBoundKeyLocalizedText();
-		var text = net.minecraft.text.Text.translatable(cooling ? "hud.mc_head_function.blaze_cooling"
-			: high ? "hud.mc_head_function.blaze_release" : "hud.mc_head_function.blaze_heat", key);
-		draw.drawCenteredTextWithShadow(client.textRenderer, text, x + 40, y - 11, color);
 	}
 
 }

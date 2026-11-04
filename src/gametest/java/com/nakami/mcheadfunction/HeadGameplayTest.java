@@ -40,7 +40,7 @@ public class HeadGameplayTest implements FabricGameTest {
 			context.assertTrue(flesh.getCount() == 2 - bite, "Each bite must consume one item");
 			context.assertTrue(player.hasStatusEffect(StatusEffects.STRENGTH), "Bite " + bite + " must grant strength");
 			context.assertTrue(player.hasStatusEffect(StatusEffects.HASTE), "Bite " + bite + " must grant haste");
-			context.assertTrue(player.getHealth() == 12, "Bite " + bite + " must heal two health");
+			context.assertTrue(player.getHealth() == 10, "Bite " + bite + " must not directly heal");
 			context.assertFalse(player.hasStatusEffect(StatusEffects.POISON), "Rotten flesh must not count as ordinary food");
 		}
 		context.complete();
@@ -61,7 +61,7 @@ public class HeadGameplayTest implements FabricGameTest {
 			flesh.finishUsing(context.getWorld(), player);
 			context.assertFalse(player.hasStatusEffect(StatusEffects.HUNGER), "Bite " + bite + " must not apply vanilla hunger");
 			context.assertFalse(player.hasStatusEffect(StatusEffects.POISON), "Repeated rotten flesh must not poison");
-			context.assertTrue(player.getHealth() == 12, "Every consecutive bite must heal");
+			context.assertTrue(player.getHealth() == 10, "Flesh must not directly heal");
 			context.assertTrue(player.getStatusEffect(StatusEffects.STRENGTH).getDuration() == 200, "Strength must refresh");
 			context.assertTrue(player.getStatusEffect(StatusEffects.HASTE).getDuration() == 200, "Haste must refresh");
 			player.getStatusEffect(StatusEffects.STRENGTH).update(player, () -> { });
@@ -84,9 +84,9 @@ public class HeadGameplayTest implements FabricGameTest {
 		player.getHungerManager().setSaturationLevel(0);
 		player.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(StatusEffects.HUNGER, 80, 1));
 		flesh.finishUsing(context.getWorld(), player);
-		context.assertTrue(player.getHungerManager().getFoodLevel() == 14, "Rotten flesh must retain nutrition");
-		context.assertTrue(Math.abs(player.getHungerManager().getSaturationLevel() - food.saturation()) < 0.001F,
-			"Rotten flesh must retain saturation");
+		context.assertTrue(player.getHungerManager().getFoodLevel() == 10, "Rotten flesh must not restore nutrition");
+		context.assertTrue(player.getHungerManager().getSaturationLevel() == 0,
+			"Rotten flesh must not restore saturation");
 		context.assertTrue(player.getStatusEffect(StatusEffects.HUNGER).getDuration() == 80,
 			"Eating must preserve pre-existing hunger without extending it");
 		context.assertTrue(player.hasStatusEffect(StatusEffects.SPEED), "Other food effects must remain");
@@ -210,7 +210,7 @@ public class HeadGameplayTest implements FabricGameTest {
 		context.complete();
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 40)
+	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 85, batchId = "creeper-recycle")
 	public void creeperRecyclesAboveImpactSurface(TestContext context) {
 		for (int x = 0; x < 5; x++) for (int z = 0; z < 5; z++) context.setBlockState(new BlockPos(x, 0, z), Blocks.OBSIDIAN);
 		var player = context.createMockCreativeServerPlayerInWorld();
@@ -218,7 +218,7 @@ public class HeadGameplayTest implements FabricGameTest {
 		player.refreshPositionAndAngles(origin.getX() + 0.5, origin.getY() + 2, origin.getZ() + 0.5, 0, 90);
 		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.CREEPER_HEAD));
 		ThrowHandler.throwHeldHead(player);
-		context.waitAndRun(10, () -> {
+		context.waitAndRun(65, () -> {
 			var items = context.getWorld().getEntitiesByClass(RecycledHeadItemEntity.class,
 				new net.minecraft.util.math.Box(origin).expand(5), e -> e.getStack().isOf(Items.CREEPER_HEAD));
 			context.assertTrue(items.size() == 1, "Creeper must recycle once");
@@ -254,9 +254,10 @@ public class HeadGameplayTest implements FabricGameTest {
 	}
 
 	@GameTest(templateName = EMPTY_STRUCTURE)
-	public void threeShakesBeheadWithoutDamage(TestContext context) {
+	public void threeGlovePunchesBeheadWithoutDamage(TestContext context) {
 		var player = context.createMockCreativeServerPlayerInWorld();
 		var target = context.spawnMob(EntityType.ZOMBIE, 2, 1, 3);
+        player.setStackInHand(Hand.MAIN_HAND, new ItemStack(HeadItems.BEHEADING_GLOVE));
 		target.setAiDisabled(true);
 		player.refreshPositionAndAngles(target.getX(), target.getY(), target.getZ() - 2, 0, 0);
 		float health = target.getHealth();

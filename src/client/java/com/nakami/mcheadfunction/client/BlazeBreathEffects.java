@@ -40,14 +40,14 @@ public final class BlazeBreathEffects {
 		float heat = MathHelper.clamp((float) pulse.heat() / BlazeFire.MAX_HEAT, 0, 1);
 		ParticlesMode setting = client.options.getParticles().getValue();
 		int count = setting == ParticlesMode.MINIMAL ? 2 : setting == ParticlesMode.DECREASED ? 4 : 6;
-		if (pulse.wave()) count += 2;
+		if (pulse.wave()) count += 6;
 		var random = client.world.random;
 		for (int i = 0; i < count; i++) {
-			double spread = pulse.wave() ? 0.19 : 0.065;
+			double spread = pulse.wave() ? 0.32 : 0.065;
 			Vec3d start = mouth.add(side.multiply((random.nextDouble() - 0.5) * spread * 2))
 				.add(up.multiply((random.nextDouble() - 0.5) * spread));
 			// Uneven bursts make overlapping tongues; each keeps its launch direction when the player turns.
-			double speed = pulse.wave() ? 0.16 + random.nextDouble() * 0.12
+			double speed = pulse.wave() ? pulse.range() * (0.10 + random.nextDouble() * 0.035)
 				: pulse.range() * (0.105 + random.nextDouble() * 0.025 + heat * 0.012);
 			Vec3d velocity = forward.multiply(speed)
 				.add(side.multiply((random.nextDouble() - 0.5) * (0.16 + heat * 0.06)))
@@ -55,10 +55,10 @@ public final class BlazeBreathEffects {
 			// Distribute births within this tick so the stream does not become equally spaced beads.
 			start = start.add(velocity.multiply((double) i / count));
 			if (ray(client.world, source, pulse.origin(), start).getType() != HitResult.Type.MISS) continue;
-			float size = (pulse.wave() ? 0.30F : 0.18F) + random.nextFloat() * 0.10F + heat * 0.10F;
+			float size = (pulse.wave() ? 0.55F : 0.18F) + random.nextFloat() * 0.10F + heat * 0.10F;
 			if (firstPerson && !pulse.wave()) size *= 0.65F;
 			client.particleManager.addParticle(new Flame(client.world, source, sprite, start, velocity,
-				pulse.origin(), forward, pulse.range(), size, pulse.wave()));
+				pulse.origin(), forward, pulse.range(), size, pulse.wave(), heat));
 		}
 	}
 
@@ -72,16 +72,17 @@ public final class BlazeBreathEffects {
 		private final double range;
 		private final float peakSize;
 		private final boolean wave;
+		private final float heat;
 		private int dying;
 
 		Flame(ClientWorld world, Entity source, Sprite sprite, Vec3d start, Vec3d velocity,
-				Vec3d origin, Vec3d forward, double range, float size, boolean wave) {
+				Vec3d origin, Vec3d forward, double range, float size, boolean wave, float heat) {
 			super(world, start.x, start.y, start.z);
 			this.source = source; this.origin = origin; this.forward = forward; this.range = range;
-			this.peakSize = size; this.wave = wave;
+			this.peakSize = size; this.wave = wave; this.heat = heat;
 			setSprite(sprite);
 			setVelocity(velocity.x, velocity.y, velocity.z);
-			maxAge = wave ? 12 : 16;
+			maxAge = wave ? 18 : 16;
 			collidesWithWorld = false;
 		}
 
@@ -114,8 +115,10 @@ public final class BlazeBreathEffects {
 			setPos(x + step.x, y + step.y, z + step.z);
 			velocityX *= 0.96; velocityY = velocityY * 0.96 + (wave ? 0.002 : 0.004); velocityZ *= 0.96;
 			float end = Math.max(dying / 4F, Math.max(0, (age - (maxAge - 5)) / 5F));
-			// Keep crisp alpha-tested pixels. Warm and shrink at the tip instead of making a translucent fog.
-			setColor(1, 1 - end * 0.48F, 1 - end * 0.72F);
+			// Low heat stays orange; high heat reads white-hot so first person can see the phase without a bar.
+			float green = MathHelper.clamp(0.42F + heat * 0.58F - end * 0.48F, 0, 1);
+			float blue = MathHelper.clamp(0.06F + heat * 0.72F - end * 0.72F, 0, 1);
+			setColor(1, green, blue);
 		}
 
 		@Override public float getSize(float tickDelta) {

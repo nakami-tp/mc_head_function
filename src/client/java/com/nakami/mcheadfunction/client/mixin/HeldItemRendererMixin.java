@@ -20,21 +20,40 @@ public abstract class HeldItemRendererMixin {
 	private void mhf$punchWithGlove(net.minecraft.client.network.AbstractClientPlayerEntity player, float delta,
 		float pitch, net.minecraft.util.Hand hand, float swing, net.minecraft.item.ItemStack stack, float equip,
 		MatrixStack matrices, VertexConsumerProvider vertices, int light, CallbackInfo ci) {
-		if (!stack.isOf(com.nakami.mcheadfunction.head.HeadItems.BEHEADING_GLOVE)) return;
+		if (hand == net.minecraft.util.Hand.MAIN_HAND && com.nakami.mcheadfunction.client.CreeperCookingControl.held(player) != null) {
+            ci.cancel();
+            if (!player.isInvisible()) {
+                matrices.push();
+                renderArmHoldingItem(matrices, vertices, light, 0, 0, player.getMainArm());
+                matrices.pop();
+            }
+            return;
+        }
+        if (hand == net.minecraft.util.Hand.MAIN_HAND
+            && com.nakami.mcheadfunction.client.ZombieFrenzyEffects.posing(player)) {
+            ci.cancel();
+            com.nakami.mcheadfunction.client.ZombieFrenzyEffects.firstPerson(player, swing, equip, matrices, vertices,
+                light, this::renderArmHoldingItem);
+            return;
+        }
+        if (!stack.isOf(com.nakami.mcheadfunction.head.HeadItems.BEHEADING_GLOVE)) return;
 		ci.cancel();
 		if (player.isInvisible()) return;
 		var arm = hand == net.minecraft.util.Hand.MAIN_HAND ? player.getMainArm() : player.getMainArm().getOpposite();
-		float side = arm == net.minecraft.util.Arm.RIGHT ? 1 : -1;
-		float extension = com.nakami.mcheadfunction.client.GloveRenderer.extension(swing)
-			* com.nakami.mcheadfunction.client.GloveRenderer.strength(player);
-		float windup = com.nakami.mcheadfunction.client.GloveRenderer.windup(swing);
-		matrices.push();
-		matrices.translate(side * (-0.08F + 0.03F * windup - 0.24F * extension),
-			0.12F - 0.03F * windup + 0.06F * extension, 0.12F * windup - 0.30F * extension);
-		matrices.multiply(net.minecraft.util.math.RotationAxis.POSITIVE_Y.rotationDegrees(side * (8 * extension)));
-		// Keep the jab independent of vanilla item swing and attack-cooldown equip dip.
-		renderArmHoldingItem(matrices, vertices, light, 0, 0, arm);
-		matrices.pop();
+        matrices.push();
+        // Keep the wearable glove, but let vanilla animate the arm and equip transition.
+        renderArmHoldingItem(matrices, vertices, light, equip, swing, arm);
+        matrices.pop();
+	}
+
+	@Inject(method = "renderItem(FLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider$Immediate;Lnet/minecraft/client/network/ClientPlayerEntity;I)V",
+		at = @At("HEAD"))
+	private void mhf$frogChewHands(float tickDelta, MatrixStack matrices, VertexConsumerProvider.Immediate vertices,
+		ClientPlayerEntity player, int light, CallbackInfo ci) {
+		float chew = com.nakami.mcheadfunction.client.FrogMouthEffects.hand(tickDelta);
+		if (chew == 0) return;
+		matrices.translate(0, chew * 0.05F, chew * 0.03F);
+		matrices.multiply(net.minecraft.util.math.RotationAxis.POSITIVE_X.rotationDegrees(chew * 18));
 	}
 
 	@Inject(method = "renderItem(FLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider$Immediate;Lnet/minecraft/client/network/ClientPlayerEntity;I)V",
@@ -42,5 +61,9 @@ public abstract class HeldItemRendererMixin {
 	private void mhf$swallow(float tickDelta, MatrixStack matrices, VertexConsumerProvider.Immediate vertices,
 		ClientPlayerEntity player, int light, CallbackInfo ci) {
 		PigSwallowEffects.renderFirstPerson(matrices, vertices, player, light, tickDelta);
+        if (com.nakami.mcheadfunction.client.CreeperCookingControl.held(player) != null) {
+            com.nakami.mcheadfunction.client.CreeperGrenadeRender.firstPerson(net.minecraft.client.MinecraftClient.getInstance(), matrices, vertices, light);
+            vertices.draw();
+        }
 	}
 }

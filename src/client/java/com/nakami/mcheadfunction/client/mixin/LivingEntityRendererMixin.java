@@ -35,9 +35,20 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, M extend
 	@Unique private int mhf$previousDeathTime;
 	@Unique private int mhf$previousHurtTime;
 
+	/** A mob held in a frog mouth is drawn as the wearer's swollen head instead. Declared first: cancels before the push below. */
+	@Inject(method = "render", at = @At("HEAD"), cancellable = true)
+	private void mhf$hideMouthful(T entity, float yaw, float tickDelta, MatrixStack matrices, VertexConsumerProvider consumers, int light, CallbackInfo ci) {
+		if (com.nakami.mcheadfunction.wear.FrogMouth.isHeld(entity)) ci.cancel();
+	}
+
 	@Inject(method = "render", at = @At("HEAD"))
 	private void mhf$hideHead(T entity, float yaw, float tickDelta, MatrixStack matrices, VertexConsumerProvider consumers, int light, CallbackInfo ci) {
 		matrices.push();
+        if (com.nakami.mcheadfunction.creeper.FearSystem.level(entity) >= 2) {
+            float time = entity.age + tickDelta;
+            matrices.translate(Math.sin(time * 2.8) * 0.035, 0, Math.cos(time * 3.1) * 0.02);
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees((float) Math.sin(time * 2.4) * 4));
+        }
 		var meal = com.nakami.mcheadfunction.client.ChestMealAnimation.tongue(entity);
 		float mealScale = meal == null ? 1 : meal.preyScale(tickDelta);
 		mhf$previousDeathTime = entity.deathTime;
@@ -75,7 +86,10 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, M extend
 			mhf$thriller(biped, HauntRules.thrillerPose(entity.getWorld().getTime()));
 		}
 		if (!(entity instanceof PlayerEntity player) || !(model instanceof BipedEntityModel<?> biped)) return;
-		com.nakami.mcheadfunction.client.GloveRenderer.pose(player, biped, tickDelta);
+        if (com.nakami.mcheadfunction.client.CreeperCookingControl.held(player) != null) {
+            var arm = player.getMainArm() == net.minecraft.util.Arm.RIGHT ? biped.rightArm : biped.leftArm;
+            arm.pitch = -1.2F;
+        }
 		float fat = HeadRules.pigFatness(((PigStuffedAccess) player).mhf$stuffedTicks(), tickDelta);
 		mhf$fatParts(biped, fat);
 		float swallow = HeadRules.pigSwallowProgress(((PigStuffedAccess) player).mhf$stuffedTicks(), tickDelta);

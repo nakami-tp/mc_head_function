@@ -22,7 +22,17 @@ public final class HeadProjectileRenderer extends EntityRenderer<ThrownHeadEntit
 		shadowRadius = 0.25F;
 	}
 	@Override public void render(ThrownHeadEntity entity, float yaw, float delta, MatrixStack matrices, VertexConsumerProvider vertices, int light) {
-		matrices.push();
+		if (entity.isGrenade()) {
+            var client = net.minecraft.client.MinecraftClient.getInstance();
+            if (entity.isCooking() && entity.getOwner() == client.player && client.options.getPerspective().isFirstPerson()) return;
+            matrices.push();
+            matrices.translate(0, 0.25, 0);
+            CreeperGrenadeRender.head(entity, matrices, vertices, light);
+            matrices.pop();
+            super.render(entity, yaw, delta, matrices, vertices, light);
+            return;
+        }
+        matrices.push();
 		float time = entity.age + delta;
 		boolean active = entity.isActive();
 		HeadType type = entity.getHeadType();

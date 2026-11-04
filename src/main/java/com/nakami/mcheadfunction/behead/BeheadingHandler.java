@@ -81,7 +81,7 @@ public final class BeheadingHandler {
 			// validation here too, so server-side callers cannot punch through walls or at a distance.
 			return player.canInteractWithEntity(target, 0) && player.canSee(target);
 		}
-		return player.getMainHandStack().isEmpty() && aimingAtHead(player, target);
+		return false;
 	}
 
 	public static boolean holdingHead(ItemStack stack) {

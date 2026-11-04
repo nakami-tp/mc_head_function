@@ -16,8 +16,11 @@ public final class PlayerHeadState {
 	public long creeperLaunchedAt;
 	public int lightningCharge;
 	public int frogCooldown;
+	public int mouthTicks;
+	public com.nakami.mcheadfunction.wear.FrogProjectile.Mouthful frogAmmo;
 	public int llamaCooldown;
 	public int endermanDodgeCooldown;
+	public int zombieDrainTicks;
 	public final com.nakami.mcheadfunction.wear.GoatMining goatMining = new com.nakami.mcheadfunction.wear.GoatMining();
 	public int goatDashTicks;
 	public Vec3d goatDashOrigin;
@@ -109,6 +112,7 @@ public final class PlayerHeadState {
 		tag.putInt("frogCooldown", frogCooldown);
 		tag.putInt("llamaCooldown", llamaCooldown);
 		tag.putInt("endermanDodgeCooldown", endermanDodgeCooldown);
+		tag.putInt("zombieDrainTicks", zombieDrainTicks);
 		if (markedTarget != null) {
 			tag.putUuid("marked", markedTarget);
 		}
@@ -134,6 +138,7 @@ public final class PlayerHeadState {
 		frogCooldown = tag.getInt("frogCooldown");
 		llamaCooldown = tag.getInt("llamaCooldown");
 		endermanDodgeCooldown = tag.getInt("endermanDodgeCooldown");
+		zombieDrainTicks = Math.clamp(tag.getInt("zombieDrainTicks"), 0, 9);
 		if (tag.containsUuid("marked")) {
 			markedTarget = tag.getUuid("marked");
 		}

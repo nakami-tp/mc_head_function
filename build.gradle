@@ -554,3 +554,36 @@ tasks.named('runBeheadingValidation').configure {
         }
     }
 }
+
+// Cooking/fear uses actual attack-key input in a fresh isolated client world.
+sourceSets {
+    fearValidation {
+        compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
+        runtimeClasspath += sourceSets.client.runtimeClasspath + sourceSets.client.output + sourceSets.main.output
+    }
+}
+loom {
+    mods { fear_client_validation { sourceSet sourceSets.fearValidation } }
+    runs {
+        fearValidation {
+            client()
+            source sourceSets.fearValidation
+            runDir 'build/fear-validation'
+        }
+    }
+}
+tasks.named('runFearValidation').configure {
+    doFirst { delete 'build/fear-validation/result.txt', 'build/fear-validation/screenshots' }
+    doLast {
+        def result = file('build/fear-validation/result.txt')
+        if (!result.exists() || !result.text.startsWith('PASS ')) {
+            throw new GradleException('Cooking/fear validation failed; see build/fear-validation/result.txt and logs.')
+        }
+        def visual = providers.exec {
+            workingDir rootDir
+            commandLine 'python3', 'scripts/testing/check-fear-visuals.py', 'build/fear-validation/screenshots'
+        }
+        logger.lifecycle(visual.standardOutput.asText.get())
+        visual.result.get().assertNormalExitValue()
+    }
+}
