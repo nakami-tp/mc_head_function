@@ -10,13 +10,16 @@ public final class ModNetworking {
 	}
 
 	public static void register() {
+		PayloadTypeRegistry.playS2C().register(CreeperBlastS2CPayload.ID, CreeperBlastS2CPayload.CODEC);
+		PayloadTypeRegistry.playS2C().register(CreeperLaunchS2CPayload.ID, CreeperLaunchS2CPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ZombieBiteS2CPayload.ID, ZombieBiteS2CPayload.CODEC);
 		PayloadTypeRegistry.playS2C().register(BlazeFlameS2CPayload.ID, BlazeFlameS2CPayload.CODEC);
 		PayloadTypeRegistry.playS2C().register(BlazeLookS2CPayload.ID, BlazeLookS2CPayload.CODEC);
 		PayloadTypeRegistry.playS2C().register(GoatChargeS2CPayload.ID, GoatChargeS2CPayload.CODEC);
+		PayloadTypeRegistry.playS2C().register(GoatEffectsS2CPayload.ID, GoatEffectsS2CPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(GoatSteerC2SPayload.ID, GoatSteerC2SPayload.CODEC);
 		ServerPlayNetworking.registerGlobalReceiver(GoatSteerC2SPayload.ID, (payload, context) ->
-			context.server().execute(() -> com.nakami.mcheadfunction.wear.GoatCharge.steer(context.player(), payload.direction())));
+			context.server().execute(() -> com.nakami.mcheadfunction.wear.GoatCharge.steer(context.player(), payload.direction(), payload.drift())));
 		PayloadTypeRegistry.playS2C().register(GolemQuakeS2CPayload.ID, GolemQuakeS2CPayload.CODEC);
 		PayloadTypeRegistry.playS2C().register(RabbitLeapS2CPayload.ID, RabbitLeapS2CPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(RabbitJumpC2SPayload.ID, RabbitJumpC2SPayload.CODEC);

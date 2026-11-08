@@ -12,8 +12,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(CreeperGrenadeRender.class)
 public class GrenadeRenderProbe {
-    @Inject(method="head",at=@At("RETURN"),remap=false)
-    private static void observe(ThrownHeadEntity grenade,MatrixStack matrices,VertexConsumerProvider vertices,int light,CallbackInfo ci) {
+    @Inject(method="head(Lcom/nakami/mcheadfunction/entity/ThrownHeadEntity;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;IF)V",at=@At("RETURN"),remap=false)
+    private static void observe(ThrownHeadEntity grenade,MatrixStack matrices,VertexConsumerProvider vertices,int light,float tickDelta,CallbackInfo ci) {
         FearClientValidation.observeHead(grenade);
     }
 }

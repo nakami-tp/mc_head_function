@@ -17,6 +17,9 @@ public abstract class BlazeCameraMixin {
 	@Shadow protected abstract void setRotation(float yaw, float pitch);
 	@Inject(method = "update", at = @At("RETURN"))
 	private void sideView(BlockView area, Entity entity, boolean thirdPerson, boolean inverse, float delta, CallbackInfo ci) {
+		if (BlazeClientValidation.coreView && thirdPerson) {
+			setPos(41, 105, 11); setRotation(90, 12); return;
+		}
 		if (BlazeClientValidation.sideView) {
 			setPos(31, 102.4, -0.5);
 			setRotation(60, 9);

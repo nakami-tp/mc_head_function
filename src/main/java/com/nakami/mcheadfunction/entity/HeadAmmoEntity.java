@@ -7,7 +7,6 @@ import net.minecraft.entity.data.TrackedDataHandlerRegistry;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.network.ServerPlayerEntity;
 import com.nakami.mcheadfunction.wear.CreeperLaunch;
 import com.nakami.mcheadfunction.head.HeadSounds;
@@ -31,6 +30,8 @@ import net.minecraft.world.World;
 public class HeadAmmoEntity extends ThrownItemEntity {
 	private static final TrackedData<Integer> ATTACHED_FACE =
 		DataTracker.registerData(HeadAmmoEntity.class, TrackedDataHandlerRegistry.INTEGER);
+	private static final TrackedData<Long> PLANTED_AT =
+		DataTracker.registerData(HeadAmmoEntity.class, TrackedDataHandlerRegistry.LONG);
 	private Vec3d plantedPosition;
 	private int plantTicks;
 
@@ -47,9 +48,11 @@ public class HeadAmmoEntity extends ThrownItemEntity {
 	protected void initDataTracker(DataTracker.Builder builder) {
 		super.initDataTracker(builder);
 		builder.add(ATTACHED_FACE, -1);
+		builder.add(PLANTED_AT, 0L);
 	}
 
 	public boolean isPlanted() { return dataTracker.get(ATTACHED_FACE) >= 0; }
+	public int plantedTicks() { return isPlanted() ? (int) Math.max(0, getWorld().getTime() - dataTracker.get(PLANTED_AT)) : 0; }
 	public Direction attachedFace() {
 		return Direction.byId(Math.max(0, dataTracker.get(ATTACHED_FACE)));
 	}
@@ -67,6 +70,7 @@ public class HeadAmmoEntity extends ThrownItemEntity {
 		dataTracker.set(ATTACHED_FACE, nbt.contains("AttachedFace") ? nbt.getInt("AttachedFace") : -1);
 		plantTicks = nbt.getInt("PlantTicks");
 		if (isPlanted()) {
+			dataTracker.set(PLANTED_AT, getWorld().getTime() - plantTicks);
 			plantedPosition = getPos();
 			setVelocity(Vec3d.ZERO);
 			setNoGravity(true);
@@ -96,7 +100,11 @@ public class HeadAmmoEntity extends ThrownItemEntity {
 		setVelocity(Vec3d.ZERO);
 		setNoGravity(true);
 		dataTracker.set(ATTACHED_FACE, face.getId());
-		if (!getWorld().isClient()) HeadSounds.play(this, SoundEvents.BLOCK_STONE_HIT, 0.4F, 0.85F);
+		dataTracker.set(PLANTED_AT, getWorld().getTime());
+		if (!getWorld().isClient()) {
+			HeadSounds.play(this, SoundEvents.BLOCK_STONE_HIT, 0.4F, 0.85F);
+			HeadSounds.play(this, SoundEvents.BLOCK_TRIPWIRE_ATTACH, 0.45F, 1.3F);
+		}
 	}
 
 	@Override
@@ -107,23 +115,16 @@ public class HeadAmmoEntity extends ThrownItemEntity {
 			if (!getWorld().isClient() && plantedPosition != null) setPosition(plantedPosition);
 			setVelocity(Vec3d.ZERO);
 		}
-		if (getWorld().isClient()) {
-			if (age % 4 == 0) {
-				Vec3d spark = getPos().add(0, getHeight() / 2, 0);
-				if (isPlanted()) spark = spark.add(Vec3d.of(attachedFace().getVector()).multiply(0.08));
-				getWorld().addParticle(ParticleTypes.FLAME, spark.x, spark.y, spark.z, 0, 0.005, 0);
-				getWorld().addParticle(ParticleTypes.SMOKE, spark.x, spark.y, spark.z, 0, 0.015, 0);
-			}
-			return;
-		}
+		if (getWorld().isClient()) return;
 		if (isInLava() || getY() < getWorld().getBottomY() - 16) {
 			discard();
 			return;
 		}
 		if (isPlanted()) {
 			plantTicks++;
-			if (plantTicks == 1 || plantTicks == 160 || plantTicks == 180 || plantTicks == 190) {
-				HeadSounds.play(this, SoundEvents.BLOCK_DISPENSER_FAIL, 0.18F, 0.8F + plantTicks / 200F);
+			int interval = plantTicks >= 180 ? 5 : plantTicks >= 160 ? 10 : 30;
+			if (plantTicks == 1 || plantTicks % interval == 0) {
+				HeadSounds.play(this, SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.22F, plantTicks >= 160 ? 1.5F : 1.05F);
 			}
 			if (plantTicks > 200) {
 				detonate();
@@ -136,6 +137,12 @@ public class HeadAmmoEntity extends ThrownItemEntity {
 			return;
 		}
 		UUID ownerId = getOwner() != null ? getOwner().getUuid() : null;
+		var blast = new com.nakami.mcheadfunction.net.CreeperBlastS2CPayload(
+			getPos().add(0, getHeight() / 2, 0), isPlanted() ? attachedFace().getId() : -1);
+		for (var observer : world.getPlayers()) {
+			if (observer.squaredDistanceTo(this) < 64 * 64)
+				net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(observer, blast);
+		}
 		world.createExplosion(
 			this,
 			world.getDamageSources().explosion(this, getOwner()),

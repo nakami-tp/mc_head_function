@@ -118,6 +118,19 @@ class HeadRulesTest {
 	}
 
 	@Test
+	void creeperPrimingFinishesBeforeTheFuseFlashes() {
+		assertEquals(0.0F, HeadRules.creeperPrimeProgress(HeadRules.CREEPER_FUSE_TICKS, true));
+		assertEquals(0.5F, HeadRules.creeperPrimeProgress(HeadRules.CREEPER_FUSE_TICKS - HeadRules.CREEPER_PRIME_TICKS / 2, true), 0.001F);
+		assertEquals(1.0F, HeadRules.creeperPrimeProgress(HeadRules.CREEPER_FUSE_TICKS - HeadRules.CREEPER_PRIME_TICKS, true));
+		assertEquals(1.0F, HeadRules.creeperPrimeProgress(1, true));
+		assertEquals(1.0F, HeadRules.creeperPrimeProgress(HeadRules.CREEPER_FUSE_TICKS, false));
+		assertFalse(HeadRules.creeperFuseLit(HeadRules.CREEPER_FUSE_TICKS, true));
+		assertFalse(HeadRules.creeperFuseLit(HeadRules.CREEPER_FUSE_TICKS - HeadRules.CREEPER_PRIME_TICKS + 1, true));
+		assertTrue(HeadRules.creeperFuseLit(HeadRules.CREEPER_FUSE_TICKS - HeadRules.CREEPER_PRIME_TICKS, true));
+		assertTrue(HeadRules.creeperFuseLit(HeadRules.CREEPER_FUSE_TICKS, false));
+	}
+
+	@Test
 	void connectedCollectIgnoresVisitedAirWhenCapping() {
 		record Cell(int x, int y) {
 		}

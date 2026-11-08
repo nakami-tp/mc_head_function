@@ -3,6 +3,8 @@ plugins {
 	id 'maven-publish'
 }
 
+apply from: 'scripts/development/runtime-snapshot.gradle'
+
 version = project.mod_version
 group = project.maven_group
 

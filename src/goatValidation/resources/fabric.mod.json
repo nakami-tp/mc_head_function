@@ -3,6 +3,7 @@
   "id": "goat_client_validation",
   "version": "1.0.0",
   "environment": "client",
+  "mixins": ["goat-validation.mixins.json"],
   "entrypoints": {
     "client": [
       "com.nakami.mcheadfunction.validation.GoatClientValidation"

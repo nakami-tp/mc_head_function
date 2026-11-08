@@ -7,9 +7,9 @@ import net.minecraft.item.Items;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundEvents;
 
-/** Reserves the actual head at ignition, so moving inventory cannot duplicate or defuse it. */
+/** Reserves the actual head at ignition, so moving inventory cannot duplicate it. Switching items snuffs the fuse. */
 public final class CreeperCooking {
-    public static final int FUSE_TICKS = 60;
+    public static final int FUSE_TICKS = com.nakami.mcheadfunction.rule.HeadRules.CREEPER_FUSE_TICKS;
     private CreeperCooking() { }
 
     public static ThrownHeadEntity held(ServerPlayerEntity player) {
@@ -33,6 +33,6 @@ public final class CreeperCooking {
         grenade.setPosition(player.getEyePos().add(player.getRotationVec(1).multiply(0.6)));
         if (!player.getServerWorld().spawnEntity(grenade)) return;
         if (!player.getAbilities().creativeMode) player.getMainHandStack().decrement(1);
-        HeadSounds.play(player, SoundEvents.ENTITY_CREEPER_PRIMED, 1, 1);
+        HeadSounds.play(player, SoundEvents.ITEM_CROSSBOW_LOADING_END.value(), 0.7F, 1.35F);
     }
 }

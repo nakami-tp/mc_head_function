@@ -22,11 +22,9 @@ public abstract class HeldItemRendererMixin {
 		MatrixStack matrices, VertexConsumerProvider vertices, int light, CallbackInfo ci) {
 		if (hand == net.minecraft.util.Hand.MAIN_HAND && com.nakami.mcheadfunction.client.CreeperCookingControl.held(player) != null) {
             ci.cancel();
-            if (!player.isInvisible()) {
-                matrices.push();
-                renderArmHoldingItem(matrices, vertices, light, 0, 0, player.getMainArm());
-                matrices.pop();
-            }
+            com.nakami.mcheadfunction.client.CreeperGrenadeRender.firstPerson(player, delta, matrices, vertices, light,
+                this::renderArmHoldingItem);
+            if (vertices instanceof VertexConsumerProvider.Immediate immediate) immediate.draw();
             return;
         }
         if (hand == net.minecraft.util.Hand.MAIN_HAND
@@ -61,9 +59,5 @@ public abstract class HeldItemRendererMixin {
 	private void mhf$swallow(float tickDelta, MatrixStack matrices, VertexConsumerProvider.Immediate vertices,
 		ClientPlayerEntity player, int light, CallbackInfo ci) {
 		PigSwallowEffects.renderFirstPerson(matrices, vertices, player, light, tickDelta);
-        if (com.nakami.mcheadfunction.client.CreeperCookingControl.held(player) != null) {
-            com.nakami.mcheadfunction.client.CreeperGrenadeRender.firstPerson(net.minecraft.client.MinecraftClient.getInstance(), matrices, vertices, light);
-            vertices.draw();
-        }
 	}
 }

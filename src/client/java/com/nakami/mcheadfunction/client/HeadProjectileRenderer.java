@@ -27,7 +27,7 @@ public final class HeadProjectileRenderer extends EntityRenderer<ThrownHeadEntit
             if (entity.isCooking() && entity.getOwner() == client.player && client.options.getPerspective().isFirstPerson()) return;
             matrices.push();
             matrices.translate(0, 0.25, 0);
-            CreeperGrenadeRender.head(entity, matrices, vertices, light);
+            CreeperGrenadeRender.head(entity, matrices, vertices, light, delta);
             matrices.pop();
             super.render(entity, yaw, delta, matrices, vertices, light);
             return;

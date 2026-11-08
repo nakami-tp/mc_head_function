@@ -31,7 +31,7 @@ public final class BlazeLook {
 
 	/** 1 = just overheated, 0 = recovered. */
 	public static float ash(int heat, int cooldown) {
-		return phase(heat, cooldown) == Phase.COOLING ? cooldown / (float) BlazeFire.COOLDOWN : 0;
+		return phase(heat, cooldown) == Phase.COOLING ? Math.min(1, cooldown / (float) BlazeFire.COOLDOWN) : 0;
 	}
 
 	/** High-heat throb between about 0.58 and 1. Other phases stay fully on. */

@@ -27,8 +27,10 @@ public final class PlayerHeadState {
 	public final Set<UUID> goatHit = new HashSet<>();
 	public final Map<UUID, Integer> wolfFleeRemaining = new HashMap<>();
 	public float goatHeading;
+	public float goatTravelHeading;
 	public float goatPitch;
 	public int goatSteering;
+	public boolean goatDrifting;
 	public long goatSteeringExpires;
 	public double goatSpeed;
 	public int goatCooldown;
@@ -45,6 +47,8 @@ public final class PlayerHeadState {
 	public int blazeCooldown;
 	public boolean blazeSpraying;
 	public boolean blazeNeedsRelease;
+	public boolean blazeCoreCharging;
+	public int blazeCoreCharge;
 	public boolean skillHeld;
 	public UUID markedTarget;
 	public UUID lastAmmo;
@@ -82,10 +86,11 @@ public final class PlayerHeadState {
 		}
 	}
 
-	public void startGoatDash(Vec3d origin) {
-		goatDashTicks = com.nakami.mcheadfunction.rule.HeadDepthRules.GOAT_DURATION;
+	public void startGoatDash(Vec3d origin, int durationTicks) {
+		goatDashTicks = durationTicks;
 		goatSpeed = 0.35;
 		goatSteering = 0;
+		goatDrifting = false;
 		goatSteeringExpires = 0;
 		goatDashOrigin = origin;
 		goatHit.clear();
@@ -95,6 +100,7 @@ public final class PlayerHeadState {
 		goatMining.clear();
 		goatDashTicks = 0;
 		goatSteering = 0;
+		goatDrifting = false;
 		goatDashOrigin = null;
 		goatHit.clear();
 	}
@@ -131,7 +137,7 @@ public final class PlayerHeadState {
 		mastery.clear();
 		for (HeadType type : HeadType.values()) mastery.put(type, Math.clamp(progress.getInt(type.name()), 0, com.nakami.mcheadfunction.rule.HeadDepthRules.MASTERY_MAX));
 		goatCooldown = tag.getInt("goatCooldown");
-		blazeCooldown = Math.clamp(tag.getInt("blazeCooldown"), 0, com.nakami.mcheadfunction.blaze.BlazeFire.COOLDOWN);
+		blazeCooldown = Math.clamp(tag.getInt("blazeCooldown"), 0, com.nakami.mcheadfunction.blaze.BlazeCore.POST_FIRE_COOLDOWN);
 		creeperCharges = tag.getInt("creeperCharges");
 		creeperRecharge = tag.getInt("creeperRecharge");
 		lightningCharge = tag.getInt("lightningCharge");

@@ -25,6 +25,13 @@ public class McHeadFunctionClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.CreeperBlastS2CPayload.ID,
+			(payload, context) -> context.client().execute(() -> CreeperAmmoEffects.receive(context.client(), payload)));
+		ClientTickEvents.END_CLIENT_TICK.register(CreeperAmmoEffects::tick);
+		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.CreeperLaunchS2CPayload.ID,
+			(payload, context) -> context.client().execute(() -> CreeperLaunchEffects.receive(context.client(), payload)));
+		ClientTickEvents.END_CLIENT_TICK.register(CreeperLaunchEffects::tick);
+		WorldRenderEvents.AFTER_ENTITIES.register(CreeperAmmoEffects::afterEntities);
         ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.ZombieBiteS2CPayload.ID,
             (payload, context) -> context.client().execute(() -> ZombieBloodEffects.receive(context.client(), payload)));
         ClientTickEvents.END_CLIENT_TICK.register(ZombieBloodEffects::tick);
@@ -43,10 +50,20 @@ public class McHeadFunctionClient implements ClientModInitializer {
 				}
 			}));
 		ClientTickEvents.END_CLIENT_TICK.register(BlazeHeadAppearance::tick);
+		ClientTickEvents.END_CLIENT_TICK.register(BlazeCoreEffects::tick);
+		WorldRenderEvents.AFTER_ENTITIES.register(BlazeCoreEffects::afterEntities);
 		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.GoatChargeS2CPayload.ID,
 			(payload, context) -> context.client().execute(() -> GoatChargeControl.receive(payload)));
+		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.GoatEffectsS2CPayload.ID,
+			(payload, context) -> context.client().execute(() -> {
+				GoatChargeEffects.receive(context.client(), payload);
+				GoatDriftPose.receive(context.client(), payload);
+			}));
+		ClientTickEvents.END_CLIENT_TICK.register(GoatDriftPose::tick);
 		ClientTickEvents.END_CLIENT_TICK.register(client -> GoatChargeControl.tick());
-		net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> GoatChargeControl.reset());
+		net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+			GoatChargeControl.reset(); GoatChargeEffects.reset();
+		});
 		ClientPlayNetworking.registerGlobalReceiver(com.nakami.mcheadfunction.net.GolemQuakeS2CPayload.ID,
 			(payload, context) -> context.client().execute(() -> GolemQuake.start(payload.strength())));
 		ClientTickEvents.END_CLIENT_TICK.register(client -> GolemQuake.tick(client.world != null));

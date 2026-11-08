@@ -86,9 +86,14 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, M extend
 			mhf$thriller(biped, HauntRules.thrillerPose(entity.getWorld().getTime()));
 		}
 		if (!(entity instanceof PlayerEntity player) || !(model instanceof BipedEntityModel<?> biped)) return;
-        if (com.nakami.mcheadfunction.client.CreeperCookingControl.held(player) != null) {
-            var arm = player.getMainArm() == net.minecraft.util.Arm.RIGHT ? biped.rightArm : biped.leftArm;
-            arm.pitch = -1.2F;
+        var grenade = com.nakami.mcheadfunction.client.CreeperCookingControl.held(player);
+        if (grenade != null) {
+            float shake = com.nakami.mcheadfunction.client.CreeperGrenadeRender.ignitionShake(grenade, tickDelta);
+            boolean right = player.getMainArm() == net.minecraft.util.Arm.RIGHT;
+            var arm = right ? biped.rightArm : biped.leftArm;
+            arm.pitch = -1.2F + 0.07F * shake;
+            arm.yaw = (right ? -1 : 1) * 0.10F * shake;
+            arm.roll = (right ? 1 : -1) * 0.16F * shake;
         }
 		float fat = HeadRules.pigFatness(((PigStuffedAccess) player).mhf$stuffedTicks(), tickDelta);
 		mhf$fatParts(biped, fat);

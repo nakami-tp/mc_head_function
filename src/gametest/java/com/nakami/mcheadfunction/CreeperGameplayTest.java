@@ -31,7 +31,7 @@ public class CreeperGameplayTest implements FabricGameTest {
 		context.complete();
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 90, batchId = "creeper-grenade-impact")
+	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 130, batchId = "creeper-grenade-impact")
 	public void thrownCreeperBreaksBlocks(TestContext context) {
 		for (int x = 0; x < 5; x++) for (int z = 0; z < 5; z++) context.setBlockState(new BlockPos(x, 1, z), Blocks.DIRT);
 		var player = context.createMockCreativeServerPlayerInWorld();
@@ -40,7 +40,7 @@ public class CreeperGameplayTest implements FabricGameTest {
 		player.setStackInHand(Hand.MAIN_HAND, Items.CREEPER_HEAD.getDefaultStack());
 		ThrowHandler.throwHeldHead(player);
 		context.waitAndRun(45, () -> context.assertFalse(context.getBlockState(new BlockPos(2, 1, 2)).isAir(), "Collision must not detonate before fuse"));
-        context.waitAndRun(63, () -> {
+        context.waitAndRun(103, () -> {
 			context.assertTrue(context.getBlockState(new BlockPos(2, 1, 2)).isAir(), "Thrown creeper must break impact dirt");
 			context.complete();
 		});

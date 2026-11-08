@@ -12,13 +12,15 @@
       "com.nakami.mcheadfunction.HeadDepthTest",
       "com.nakami.mcheadfunction.CreeperGameplayTest",
       "com.nakami.mcheadfunction.FearGameplayTest",
+      "com.nakami.mcheadfunction.FearExpansionGameplayTest",
       "com.nakami.mcheadfunction.BlazeGameplayTest",
       "com.nakami.mcheadfunction.GolemGameplayTest",
       "com.nakami.mcheadfunction.FrogGameplayTest",
       "com.nakami.mcheadfunction.BeeGameplayTest",
       "com.nakami.mcheadfunction.HauntGameplayTest",
       "com.nakami.mcheadfunction.ChestMealGameplayTest",
-      "com.nakami.mcheadfunction.HauntTownGameplayTest"
+      "com.nakami.mcheadfunction.HauntTownGameplayTest",
+      "com.nakami.mcheadfunction.HeadDisplayTest"
     ]
   }
 }

@@ -19,6 +19,7 @@ import net.minecraft.entity.EntityType;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.CreeperEntity;
+import net.minecraft.entity.mob.EndermanEntity;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -27,6 +28,7 @@ import net.minecraft.resource.DataConfiguration;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.GameMode;
 import net.minecraft.world.GameRules;
@@ -36,7 +38,7 @@ import net.minecraft.world.level.LevelInfo;
 
 /** Actual left-click packets, server AI, tracked client levels, rendering, sound and loot. */
 public final class FearClientValidation implements ClientModInitializer {
-    private boolean opening, setup, finished;
+    private boolean opening, setup, finished, holdingAttack;
     private volatile boolean ready;
     private volatile String failure;
     public static volatile int sheepId = -1;
@@ -50,10 +52,21 @@ public final class FearClientValidation implements ClientModInitializer {
     private volatile int grenadeId = -1, releaseFuse = -1;
     private boolean explosionBeforeDeadline, explosionAfterDeadline;
     private volatile float previousHealth;
+    public static volatile int endermanId = -1;
+    public static int panicMouthFrames, recoveredMouthFrames;
+    private int endermanScreams, endermanStares, screamsAfterRecovery;
+    private volatile boolean endermanDropsVerified, endermanFled;
+    private Vec3d endermanStart;
+
+    public static void observeEnderman(LivingEntity entity, float headY) {
+        if (entity.getId() != endermanId) return;
+        if (FearSystem.level(entity) == 3 && headY == -18) panicMouthFrames++;
+        if (FearSystem.level(entity) == 0 && headY == -13) recoveredMouthFrames++;
+    }
 
     public static void observeHead(ThrownHeadEntity grenade) {
         skullFrames++;
-        if (CreeperGrenadeRender.flashing(grenade.fuseTicks())) whiteFrames++; else greenFrames++;
+        if (CreeperGrenadeRender.flashing(grenade)) whiteFrames++; else greenFrames++;
     }
     public static void observeMob(LivingEntity entity, float x) {
         if (entity.getId() == sheepId && FearSystem.level(entity) >= 2) {
@@ -61,7 +74,17 @@ public final class FearClientValidation implements ClientModInitializer {
             minShake = Math.min(minShake, x); maxShake = Math.max(maxShake, x);
         }
     }
-    @Override public void onInitializeClient() { ClientTickEvents.END_CLIENT_TICK.register(this::tick); }
+    @Override public void onInitializeClient() {
+        ClientTickEvents.START_CLIENT_TICK.register(client -> {
+            // This isolated client owns scripted input. Desktop focus changes
+            // must not synthesize a release before the scheduled release tick.
+            if (holdingAttack && !finished) {
+                client.onWindowFocusChanged(true);
+                client.options.attackKey.setPressed(true);
+            }
+        });
+        ClientTickEvents.END_CLIENT_TICK.register(this::tick);
+    }
     private void tick(MinecraftClient client) {
         if (finished) return;
         try {
@@ -79,6 +102,8 @@ public final class FearClientValidation implements ClientModInitializer {
                 client.getSoundManager().registerListener((sound, set, range) -> {
                     if (sound.getId().getPath().equals("entity.creeper.primed")) primedSounds++;
                     if (sound.getId().getPath().equals("block.dispenser.fail")) tickSounds++;
+                    if (endermanId >= 0 && sound.getId().getPath().equals("entity.enderman.scream")) endermanScreams++;
+                    if (endermanId >= 0 && sound.getId().getPath().equals("entity.enderman.stare")) endermanStares++;
                 });
                 client.createIntegratedServerLoader().createAndStart("fear-" + System.currentTimeMillis(),
                     new LevelInfo("Cooking and fear regression", GameMode.SURVIVAL, false, Difficulty.NORMAL, true,
@@ -93,6 +118,11 @@ public final class FearClientValidation implements ClientModInitializer {
             if (!ready || (ticks == 0 && client.world.getEntityById(sheepId) == null)) return;
             client.getToastManager().clear();
             ticks++;
+            // Building the shaded arena and tracking its new entity may take several server ticks.
+            if (ticks == 446 && !(client.world.getEntityById(endermanId) instanceof EndermanEntity)) {
+                ticks--;
+                return;
+            }
             // All gameplay input uses the same attack key events as the actual player.
             if (ticks == 40 || ticks == 91 || ticks == 295 || ticks == 346) press(client);
             if (ticks == 85 || ticks == 140 || ticks == 340 || ticks == 395) release(client);
@@ -103,9 +133,14 @@ public final class FearClientValidation implements ClientModInitializer {
                 if (level == 2) levelTwoFrames++;
                 if (level == 3) levelThreeFrames++;
             }
+            if (ticks >= 42 && ticks <= 51) {
+                var held = CreeperCookingControl.held(client.player);
+                check(held != null && !CreeperGrenadeRender.flashing(held), "Ignition shakes must finish before the fuse flashes");
+                screenshot(client, String.format("pin-%03d", ticks - 42));
+            }
             if (ticks >= 52 && ticks <= 78) {
                 var held = CreeperCookingControl.held(client.player);
-                check(held != null && held.fuseTicks() > 0 && held.fuseTicks() < 60, "Actual attack input failed to cook on client");
+                check(held != null && held.fuseTicks() > 0 && held.fuseTicks() < CreeperCooking.FUSE_TICKS, "Actual attack input failed to cook on client");
                 if (ticks % 2 == 0) screenshot(client, String.format("warm-%03d", (ticks - 52) / 2));
                 if (ticks == 55 || ticks == 66 || ticks == 75) screenshot(client, "held-" + ticks);
             }
@@ -120,7 +155,7 @@ public final class FearClientValidation implements ClientModInitializer {
             }
             if (ticks == 89) server(client, () -> {
                 var grenade = (ThrownHeadEntity) player(client).getServerWorld().getEntityById(grenadeId);
-                check(grenade != null && !grenade.isCooking() && grenade.fuseTicks() < 22, "Release must preserve cooked fuse, grenade=" + grenade + " cooking=" + (grenade != null && grenade.isCooking()) + " fuse=" + (grenade == null ? -1 : grenade.fuseTicks()));
+                check(grenade != null && !grenade.isCooking() && grenade.fuseTicks() >= 50 && grenade.fuseTicks() <= 60, "Release must preserve cooked fuse, grenade=" + grenade + " cooking=" + (grenade != null && grenade.isCooking()) + " fuse=" + (grenade == null ? -1 : grenade.fuseTicks()));
                 releaseFuse = grenade.fuseTicks();
             });
             if (ticks == 88) client.player.setPitch(12);
@@ -129,7 +164,7 @@ public final class FearClientValidation implements ClientModInitializer {
                 check(client.world.getEntityById(grenadeId) != null, "Grenade exploded before cooked deadline");
                 explosionBeforeDeadline = true;
             }
-            if (ticks == 110) {
+            if (ticks == 148) {
                 check(client.world.getEntityById(grenadeId) == null, "Grenade did not explode after cooked deadline");
                 explosionAfterDeadline = true;
             }
@@ -175,21 +210,34 @@ public final class FearClientValidation implements ClientModInitializer {
                 check(creeper instanceof CreeperEntity && ((CreeperEntity) creeper).isIgnited(), "Client creeper did not ignite");
                 screenshot(client, "creeper-ignited");
             }
+            if (ticks >= 397 && ticks <= 430) server(client, () -> {
+                playerHurt |= player(client).getHealth() < previousHealth;
+            });
             if (ticks == 430) server(client, () -> {
                 var player = player(client);
                 creeperExploded = player.getServerWorld().getEntityById(creeperId) == null;
-                playerHurt = player.getHealth() < previousHealth;
+                playerHurt |= player.getHealth() < previousHealth;
                 check(creeperExploded && playerHurt, "Retaliation must self-destruct and hurt survival player, health=" + player.getHealth());
             });
             if (ticks == 435) screenshot(client, "after-explosion");
             if (ticks == 445) {
                 check(dropsVerified && playerHurt && creeperExploded && explosionBeforeDeadline && explosionAfterDeadline, "Missing final server assertions");
+                server(client, () -> prepareEnderman(client));
+            }
+            if (ticks > 445) tickEnderman(client);
+            if (ticks == 785) {
+                check(endermanDropsVerified && endermanFled && panicMouthFrames > 5 && recoveredMouthFrames > 5,
+                    "Enderman drop, fleeing or actual open/recovered mouth render missing");
+                check(endermanStares >= 1 && endermanScreams >= 2 && endermanScreams == screamsAfterRecovery,
+                    "Enderman must cry repeatedly during panic and stop after recovery");
                 finish(client, "PASS actualLeftClick=true levels=" + levelOneFrames + "," + levelTwoFrames + "," + levelThreeFrames
                     + " skullFrames=" + skullFrames + " white=" + whiteFrames + " green=" + greenFrames
                     + " shaken=" + shakenFrames + " shakeSpan=" + (maxShake-minShake)
                     + " ignitionSounds=" + primedSounds + " tickSounds=" + tickSounds
                     + " drops=egg,wool,emerald recovery=true cookedReleaseFuse=" + releaseFuse
-                    + " retaliationExplosion=true survivalPlayerHurt=true particles=MINIMAL");
+                    + " retaliationExplosion=true survivalPlayerHurt=true endermanBlockDrop=true endermanFled=true"
+                    + " panicMouthFrames=" + panicMouthFrames + " recoveredMouthFrames=" + recoveredMouthFrames
+                    + " endermanStares=" + endermanStares + " endermanScreams=" + endermanScreams + " particles=MINIMAL");
             }
         } catch (Throwable error) { finish(client, "FAIL tick=" + ticks + " " + error); }
     }
@@ -221,21 +269,102 @@ public final class FearClientValidation implements ClientModInitializer {
         sheepId = spawn(client, EntityType.SHEEP, -25).getId();
         var creeper = spawn(client, EntityType.CREEPER, 0); creeperId = creeper.getId();
         var player = player(client); player.setHealth(20); previousHealth = 20;
+        // Survive the existing retaliation check so the same client can continue into Enderman validation.
+        player.equipStack(net.minecraft.entity.EquipmentSlot.HEAD, Items.NETHERITE_HELMET.getDefaultStack());
+        player.equipStack(net.minecraft.entity.EquipmentSlot.CHEST, Items.NETHERITE_CHESTPLATE.getDefaultStack());
+        player.equipStack(net.minecraft.entity.EquipmentSlot.LEGS, Items.NETHERITE_LEGGINGS.getDefaultStack());
+        player.equipStack(net.minecraft.entity.EquipmentSlot.FEET, Items.NETHERITE_BOOTS.getDefaultStack());
         player.teleport(world,0,100,4,180,12);
         player.setStackInHand(Hand.MAIN_HAND,new ItemStack(Items.CREEPER_HEAD,8));
     }
+    private void prepareEnderman(MinecraftClient client) {
+        var player = player(client);
+        var world = player.getServerWorld();
+        var pending = CreeperCooking.held(player);
+        if (pending != null) pending.discard();
+        for (var mob : world.getEntitiesByClass(MobEntity.class, player.getBoundingBox().expand(50), entity -> true)) mob.discard();
+        // Shade prevents vanilla daylight teleportation from obscuring the fleeing behavior.
+        for (int x = -35; x <= 35; x++) for (int z = -35; z <= 35; z++) {
+            world.setBlockState(new BlockPos(x, 99, z), Blocks.SMOOTH_QUARTZ.getDefaultState());
+            world.setBlockState(new BlockPos(x, 104, z),
+                ((x & 3) == 0 && (z & 3) == 0 ? Blocks.SEA_LANTERN : Blocks.SMOOTH_QUARTZ).getDefaultState());
+        }
+        var enderman = spawn(client, EntityType.ENDERMAN, 0);
+        enderman.setCarriedBlock(Blocks.GRASS_BLOCK.getDefaultState());
+        enderman.getRandom().setSeed(42);
+        endermanStart = enderman.getPos();
+        endermanId = enderman.getId();
+        player.setHealth(20);
+        player.teleport(world, 0, 100, 6, 180, 12);
+        player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.CREEPER_HEAD, 8));
+    }
+    private void tickEnderman(MinecraftClient client) {
+        if (ticks == 465) {
+            var enderman = client.world.getEntityById(endermanId);
+            check(enderman instanceof EndermanEntity mob && mob.getCarriedBlock() != null,
+                "Client must initially render the carried block, id=" + endermanId + " entity=" + enderman
+                    + " block=" + (enderman instanceof EndermanEntity mob ? mob.getCarriedBlock() : null));
+            screenshot(client, "enderman-before");
+        }
+        if (ticks == 470 || ticks == 565) press(client);
+        // Switching slots uses the normal defuse path, keeping blasts out of the shaded arena.
+        if (ticks == 555 || ticks == 640) client.player.getInventory().selectedSlot = 1;
+        if (ticks == 640) recoveredMouthFrames = 0;
+        if (ticks == 558 || ticks == 643) release(client);
+        if (ticks == 562) client.player.getInventory().selectedSlot = 0;
+        if (ticks == 552) {
+            var enderman = client.world.getEntityById(endermanId);
+            check(enderman instanceof EndermanEntity mob && FearSystem.level(mob) == 3 && mob.getCarriedBlock() == null,
+                "Client must receive level three and cleared carried block");
+            screenshot(client, "enderman-screaming");
+            server(client, () -> {
+                var mob = (EndermanEntity) player(client).getServerWorld().getEntityById(endermanId);
+                check(mob.getCarriedBlock() == null && mob.getTarget() == null, "Panic must clear block without attacking");
+                var items = player(client).getServerWorld().getEntitiesByClass(ItemEntity.class, mob.getBoundingBox().expand(8),
+                    item -> item.getStack().isOf(Items.GRASS_BLOCK));
+                check(items.stream().mapToInt(item -> item.getStack().getCount()).sum() == 1, "Enderman must drop exactly one grass block");
+                endermanDropsVerified = true;
+                mob.setAiDisabled(false);
+            });
+        }
+        if (ticks >= 565 && ticks <= 640 && ticks % 5 == 0) server(client, () -> {
+            var player = player(client);
+            var mob = (EndermanEntity) player.getServerWorld().getEntityById(endermanId);
+            check(mob != null && mob.getTarget() == null, "Frightened Enderman must remain alive and not attack");
+            if (mob.getPos().subtract(endermanStart).horizontalLength() > 2) endermanFled = true;
+            player.teleport(player.getServerWorld(), mob.getX(), 100, mob.getZ() + 5, 180, 12);
+        });
+        if (ticks >= 570 && ticks <= 630 && ticks % 10 == 0) screenshot(client, "enderman-flee-" + ticks);
+        if (ticks == 750) server(client, () -> {
+            var player = player(client);
+            var mob = (EndermanEntity) player.getServerWorld().getEntityById(endermanId);
+            check(mob != null && FearSystem.level(mob) == 0, "Server Enderman must recover fully");
+            mob.setAiDisabled(true);
+            mob.setYaw(0);
+            mob.setHeadYaw(0);
+            mob.setBodyYaw(0);
+            player.teleport(player.getServerWorld(), mob.getX(), 100, mob.getZ() + 5, 180, 12);
+        });
+        if (ticks == 760) {
+            var enderman = client.world.getEntityById(endermanId);
+            check(enderman instanceof EndermanEntity mob && FearSystem.level(mob) == 0, "Client Enderman must recover fully");
+            screamsAfterRecovery = endermanScreams;
+            screenshot(client, "enderman-recovered");
+        }
+    }
     private void press(MinecraftClient client) {
-        org.lwjgl.glfw.GLFW.glfwFocusWindow(client.getWindow().getHandle());
+        holdingAttack = true;
+        client.onWindowFocusChanged(true);
         client.options.attackKey.setPressed(true);
         KeyBinding.onKeyPressed(InputUtil.Type.MOUSE.createFromCode(0));
     }
-    private void release(MinecraftClient client) { client.options.attackKey.setPressed(false); }
+    private void release(MinecraftClient client) { holdingAttack = false; client.options.attackKey.setPressed(false); }
     private void screenshot(MinecraftClient client,String name) { ScreenshotRecorder.saveScreenshot(client.runDirectory,name+".png",client.getFramebuffer(),m -> {}); }
     private ServerPlayerEntity player(MinecraftClient client) { return client.getServer().getPlayerManager().getPlayerList().getFirst(); }
     private void server(MinecraftClient client,Runnable action) { client.getServer().execute(() -> { try { action.run(); } catch(Throwable error) { failure=error.toString(); } }); }
     private static void check(boolean pass,String message) { if(!pass) throw new IllegalStateException(message); }
     private void finish(MinecraftClient client,String result) {
-        finished=true; client.options.attackKey.setPressed(false);
+        finished=true; holdingAttack=false; client.options.attackKey.setPressed(false);
         try { Files.writeString(Path.of("result.txt"),result+"\n"); } catch(Exception error) { throw new RuntimeException(error); }
         client.scheduleStop();
     }

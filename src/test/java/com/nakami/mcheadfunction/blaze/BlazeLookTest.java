@@ -29,6 +29,10 @@ class BlazeLookTest {
 		assertEquals(BlazeLook.Phase.COOLING, BlazeLook.phase(0, 40));
 		assertEquals(0F, BlazeLook.glow(0, 40));
 		assertEquals(1F, BlazeLook.ash(0, 40));
+		assertEquals(1F, BlazeLook.ash(0, 80));
+		assertEquals(BlazeLook.Phase.COOLING, BlazeLook.phase(0, 80));
+		assertEquals(1F, BlazeLook.ash(0, 160));
+		assertEquals(BlazeLook.Phase.COOLING, BlazeLook.phase(0, 160));
 		assertEquals(0.5F, BlazeLook.ash(0, 20));
 		assertEquals(BlazeLook.Phase.IDLE, BlazeLook.phase(0, 0));
 	}

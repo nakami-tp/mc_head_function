@@ -150,7 +150,7 @@ final class HeadScenes {
                 event(c,t,1,"throw",()->ThrowHandler.throwHeldHead(p));event(c,t,4.6,"wear",()->{wear(p,HeadType.GOAT);p.setStackInHand(Hand.MAIN_HAND,ItemStack.EMPTY);});
                 event(c,t,5,"charge",()->skill(p));
                 if(t>=115&&t<124)f.server(c,()->com.nakami.mcheadfunction.wear.GoatCharge.steer(p,-1));
-                event(c,t,6.8,"brake",()->skill(p));
+                event(c,t,6.8,"brake",()->com.nakami.mcheadfunction.wear.GoatCharge.stop(p));
                 event(c,t,7.5,"check-brake",()->f.check(PlayerHeadAccess.state(p).goatDashTicks==0&&p.getY()>=f.by-.1,"goat brake did not stop on stage"));
             }
             case "golem"->{

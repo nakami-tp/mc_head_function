@@ -42,7 +42,8 @@ public final class SkillHandler {
 		}
 		switch (worn.wearStyle) {
 			case BLAZE -> {
-				if (!wasHeld) HeadSounds.play(player, SoundEvents.ITEM_FIRECHARGE_USE, 0.4F, 0.95F);
+				if (state.blazeCooldown > 0) state.blazeNeedsRelease = true;
+				else HeadSounds.play(player, SoundEvents.ITEM_FIRECHARGE_USE, 0.4F, 0.95F);
 			}
 			case CHARGED_CREEPER -> lightning(player, state);
 			case CREEPER -> creeperAmmo(player, state);

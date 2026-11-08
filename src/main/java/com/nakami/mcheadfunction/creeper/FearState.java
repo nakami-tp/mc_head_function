@@ -11,6 +11,8 @@ public final class FearState {
     public boolean rewarded;
     public long rewardCooldown;
     public int retaliationTicks;
+    // Transient audio pacing; a reloaded frightened Enderman can cry again immediately.
+    public long lastPanicSound = -1000;
 
     public void write(NbtCompound nbt) {
         var tag = new NbtCompound();

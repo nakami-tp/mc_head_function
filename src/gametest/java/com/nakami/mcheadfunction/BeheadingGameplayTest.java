@@ -147,4 +147,26 @@ public final class BeheadingGameplayTest implements FabricGameTest {
         context.assertFalse(BeheadingHandler.tryShake(player, skeleton), "Unsupported mobs must remain ineligible");
         context.complete();
     }
+
+    @GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 50)
+    public void beheadedCreeperCannotKeepExploding(TestContext context) {
+        var creeper = context.spawnMob(EntityType.CREEPER, 2, 2, 3);
+        creeper.setAiDisabled(true);
+        creeper.setNoGravity(true);
+        creeper.ignite();
+        var player = context.createMockCreativeServerPlayerInWorld();
+        player.refreshPositionAndAngles(creeper.getX(), creeper.getY(), creeper.getZ() - 1.5, 0, 0);
+        player.setStackInHand(Hand.MAIN_HAND, new ItemStack(HeadItems.BEHEADING_GLOVE));
+        player.attack(creeper);
+        player.attack(creeper);
+        player.attack(creeper);
+        context.assertTrue(HeadlessAccess.isHeadless(creeper), "Third punch must behead creeper");
+        context.assertTrue(creeper.isAlive(), "Beheading must leave the body alive");
+        creeper.ignite();
+        context.waitAndRun(40, () -> {
+            context.assertTrue(creeper.isAlive() && !creeper.isRemoved(), "Headless creeper must not explode");
+            context.assertFalse(creeper.isIgnited(), "Headless creeper must not stay primed");
+            context.complete();
+        });
+    }
 }

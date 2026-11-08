@@ -3,6 +3,7 @@
 	"package": "com.nakami.mcheadfunction.client.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
+        "EndermanFearRendererMixin",
         "ZombieSprintMixin",
         "ZombieSwingArmMixin",
 		"GolemCameraMixin",
@@ -19,6 +20,7 @@
 		"RabbitAirMovementMixin",
 		"FrogCameraMixin",
 		"GoatCameraMixin",
+		"GoatDriftRendererMixin",
 		"GoatLookMixin",
 		"GoatInputMixin",
 		"GloveArmRendererMixin",

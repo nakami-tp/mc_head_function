@@ -2,6 +2,22 @@
 allprojects {
     layout.buildDirectory.set(file('build/creeper-isolated'))
     afterEvaluate {
+        // Loom shares launch.cfg between build directories. Snapshot this run's
+        // paths before another isolated build can replace them during startup.
+        def isolatedLaunch = layout.buildDirectory.file('launch.cfg').get().asFile
+        tasks.named('generateDLIConfig').configure {
+            outputs.upToDateWhen { false }
+            doLast {
+                isolatedLaunch.parentFile.mkdirs()
+                isolatedLaunch.text = project.file('.gradle/loom-cache/launch.cfg').text
+            }
+        }
+        tasks.matching { it.name in ['runCreeperValidation', 'runGametest'] }.configureEach {
+            doFirst {
+                jvmArgs = jvmArgs.findAll { !it.toString().startsWith('-Dfabric.dli.config=') } +
+                    ["-Dfabric.dli.config=${isolatedLaunch.absolutePath}"]
+            }
+        }
         tasks.named('processGametestResources').configure {
             doLast {
                 def manifest = file("${destinationDir}/fabric.mod.json")

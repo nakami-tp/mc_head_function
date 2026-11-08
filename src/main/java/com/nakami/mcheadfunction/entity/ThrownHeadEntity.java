@@ -170,13 +170,43 @@ public class ThrownHeadEntity extends ThrownItemEntity {
         velocityDirty = true;
     }
 
+    public void defuseInto(net.minecraft.entity.player.PlayerEntity player) {
+        if (!isCooking() || getWorld().isClient()) return;
+        ItemStack reserved = getStack().copyWithCount(1);
+        recycled = true;
+        dataTracker.set(COOKING, false);
+        dataTracker.set(FUSE, -1);
+        discard();
+        if (!player.getAbilities().creativeMode) restoreReservedHead(player, reserved);
+        HeadSounds.play(player, SoundEvents.BLOCK_FIRE_EXTINGUISH, 0.45F, 1.35F);
+    }
+
+    private void restoreReservedHead(net.minecraft.entity.player.PlayerEntity player, ItemStack reserved) {
+        var inventory = player.getInventory();
+        if (cookingSlot >= 0 && cookingSlot < inventory.main.size()) {
+            ItemStack current = inventory.getStack(cookingSlot);
+            if (current.isEmpty()) {
+                inventory.setStack(cookingSlot, reserved);
+                return;
+            }
+            if (ItemStack.areItemsAndComponentsEqual(current, reserved) && current.getCount() < current.getMaxCount()) {
+                current.increment(1);
+                return;
+            }
+        }
+        if (!inventory.insertStack(reserved)) player.dropItem(reserved, false);
+    }
+
     private void tickGrenade() {
         baseTick();
         if (isInLava() || getY() < getWorld().getBottomY() - 16) { discard(); return; }
         if (isCooking()) {
             if (getOwner() instanceof net.minecraft.entity.player.PlayerEntity player && player.isAlive()
-                && !player.isRemoved() && !player.isSpectator() && player.getWorld() == getWorld()
-                && player.getInventory().selectedSlot == cookingSlot) {
+                && !player.isRemoved() && !player.isSpectator() && player.getWorld() == getWorld()) {
+                if (player.getInventory().selectedSlot != cookingSlot) {
+                    if (!getWorld().isClient()) defuseInto(player);
+                    return;
+                }
                 var look = player.getRotationVec(1);
                 var side = Vec3d.fromPolar(0, player.getYaw() + 90).multiply(player.getMainArm() == net.minecraft.util.Arm.RIGHT ? 0.35 : -0.35);
                 setPosition(player.getEyePos().add(look.multiply(0.55)).add(side).add(0, -0.45, 0));
@@ -190,14 +220,24 @@ public class ThrownHeadEntity extends ThrownItemEntity {
             setVelocity(horizontalCollision ? new Vec3d(0, velocity.y, 0) : velocity.multiply(0.98, 1, 0.98));
             if (isOnGround()) setVelocity(getVelocity().multiply(0.65, 0, 0.65));
         }
+        boolean lit = HeadRules.creeperFuseLit(fuseTicks(), isCooking());
         if (getWorld().isClient()) {
-            if (fuseTicks() % 3 == 0) getWorld().addParticle(ParticleTypes.SMOKE, getX(), getY() + 0.45, getZ(), 0, 0.025, 0);
+            if (!lit && isCooking()) {
+                getWorld().addParticle(ParticleTypes.CRIT, getX(), getY() + 0.35, getZ(), 0, 0.08, 0);
+            } else if (lit && fuseTicks() % 3 == 0) {
+                getWorld().addParticle(ParticleTypes.SMOKE, getX(), getY() + 0.45, getZ(), 0, 0.025, 0);
+            }
             return;
         }
         int remaining = fuseTicks() - 1;
         dataTracker.set(FUSE, Math.max(0, remaining));
+        if (remaining == HeadRules.CREEPER_FUSE_TICKS - HeadRules.CREEPER_PRIME_TICKS) {
+            HeadSounds.play(this, SoundEvents.ENTITY_CREEPER_PRIMED, 1, 1);
+        }
         int interval = remaining < 15 ? 3 : remaining < 30 ? 6 : 12;
-        if (remaining > 0 && remaining % interval == 0) HeadSounds.play(this, SoundEvents.BLOCK_DISPENSER_FAIL, 0.35F, 0.8F + (60 - remaining) / 60F);
+        if (HeadRules.creeperFuseLit(remaining, isCooking()) && remaining > 0 && remaining % interval == 0) {
+            HeadSounds.play(this, SoundEvents.BLOCK_DISPENSER_FAIL, 0.35F, 0.8F + (HeadRules.CREEPER_FUSE_TICKS - remaining) / (float) HeadRules.CREEPER_FUSE_TICKS);
+        }
         if (remaining <= 0) {
             practice();
             var world = (ServerWorld) getWorld();
@@ -819,7 +859,7 @@ public class ThrownHeadEntity extends ThrownItemEntity {
 	@Override
 	public void readCustomDataFromNbt(NbtCompound nbt) {
 		super.readCustomDataFromNbt(nbt);
-		dataTracker.set(FUSE, nbt.contains("creeperFuse") ? Math.clamp(nbt.getInt("creeperFuse"), -1, 60) : -1);
+		dataTracker.set(FUSE, nbt.contains("creeperFuse") ? Math.clamp(nbt.getInt("creeperFuse"), -1, HeadRules.CREEPER_FUSE_TICKS) : -1);
         // A saved lit head resumes as a loose grenade, never as a stale hand reservation.
         dataTracker.set(COOKING, false);
         if (dataTracker.get(FUSE) >= 0) setNoGravity(false);

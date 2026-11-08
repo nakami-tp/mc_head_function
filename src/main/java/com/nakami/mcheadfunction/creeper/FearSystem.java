@@ -8,16 +8,28 @@ import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.boss.WitherEntity;
 import net.minecraft.entity.mob.CreeperEntity;
+import net.minecraft.entity.mob.EndermanEntity;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.mob.PathAwareEntity;
 import net.minecraft.entity.mob.WardenEntity;
 import net.minecraft.entity.passive.ChickenEntity;
+import net.minecraft.entity.passive.CatEntity;
+import net.minecraft.entity.passive.CowEntity;
+import net.minecraft.entity.passive.DonkeyEntity;
+import net.minecraft.entity.passive.HorseEntity;
+import net.minecraft.entity.passive.LlamaEntity;
+import net.minecraft.entity.passive.MooshroomEntity;
+import net.minecraft.entity.passive.MuleEntity;
+import net.minecraft.entity.passive.PigEntity;
+import net.minecraft.entity.passive.RabbitEntity;
 import net.minecraft.entity.passive.SheepEntity;
 import net.minecraft.entity.passive.VillagerEntity;
+import net.minecraft.entity.passive.WolfEntity;
 import net.minecraft.item.Items;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.Identifier;
 
 /** Fear controls existing mobs without deleting their goals or replacing their brains. */
@@ -89,6 +101,18 @@ public final class FearSystem {
         }
         mob.setTarget(null);
         mob.setAttacking(false);
+        if (mob instanceof EndermanEntity enderman && level == 3) {
+            var block = enderman.getCarriedBlock();
+            if (block != null) {
+                enderman.setCarriedBlock(null);
+                enderman.dropItem(block.getBlock());
+            }
+            if (previousLevel < 3 || now - state.lastPanicSound >= 40) {
+                enderman.playSound(previousLevel < 3 ? SoundEvents.ENTITY_ENDERMAN_STARE : SoundEvents.ENTITY_ENDERMAN_SCREAM,
+                    2.5F, 1.0F);
+                state.lastPanicSound = now;
+            }
+        }
         if (mob instanceof CreeperEntity creeper) {
             if (level < 3 && !creeper.isIgnited()) creeper.setFuseSpeed(-1);
             if (level == 3 && state.retaliationTicks == 0) {
@@ -102,12 +126,26 @@ public final class FearSystem {
         } else if (level == 3 && !state.rewarded) {
             state.rewarded = true;
             if (now >= state.rewardCooldown) {
-                if (mob instanceof ChickenEntity chicken && !chicken.isBaby()) chicken.dropItem(Items.EGG);
-                if (mob instanceof SheepEntity sheep && sheep.isShearable()) sheep.sheared(SoundCategory.NEUTRAL);
-                if (mob instanceof VillagerEntity villager && !villager.isBaby()) villager.dropItem(Items.EMERALD);
+                dropProduce(mob);
                 state.rewardCooldown = now + REWARD_COOLDOWN;
             }
         }
+    }
+
+    private static void dropProduce(MobEntity mob) {
+        if (mob.isBaby()) return;
+        if (mob instanceof ChickenEntity) mob.dropItem(Items.EGG);
+        else if (mob instanceof SheepEntity sheep && sheep.isShearable()) sheep.sheared(SoundCategory.NEUTRAL);
+        else if (mob instanceof VillagerEntity) mob.dropItem(Items.EMERALD);
+        else if (mob instanceof CowEntity) {
+            mob.dropItem(Items.WHEAT);
+            if (mob instanceof MooshroomEntity mooshroom) mob.dropItem(mooshroom.getVariant().getMushroomState().getBlock());
+        } else if (mob instanceof HorseEntity || mob instanceof DonkeyEntity || mob instanceof MuleEntity || mob instanceof LlamaEntity) {
+            mob.dropItem(Items.WHEAT);
+        } else if (mob instanceof PigEntity) mob.dropItem(mob.getRandom().nextBoolean() ? Items.CARROT : Items.POTATO);
+        else if (mob instanceof RabbitEntity) mob.dropItem(Items.RABBIT_HIDE);
+        else if (mob instanceof CatEntity) mob.dropItem(Items.STRING);
+        else if (mob instanceof WolfEntity) mob.dropItem(Items.BONE);
     }
 
     /** Called instead of normal AI while frightened; controllers still tick so paths actually move. */

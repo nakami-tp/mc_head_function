@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "com.nakami.mcheadfunction.validation.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["GoatShowcaseCamera", "GoatPoseProbe", "GoatOrientationProbe", "GoatNetworkProbe"],
+  "injectors": {"defaultRequire": 1}
+}

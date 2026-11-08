@@ -52,7 +52,7 @@ public final class FearGameplayTest implements FabricGameTest {
         });
     }
 
-    @GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 90, batchId = "fear-fuse")
+    @GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 130, batchId = "fear-fuse")
     public void cookedFuseContinuesAfterReleaseAndRecoversExactlyOneHead(TestContext context) {
         var player = player(context);
         player.getAbilities().creativeMode = false;
@@ -63,28 +63,47 @@ public final class FearGameplayTest implements FabricGameTest {
         CreeperCooking.input(player, true);
         context.assertTrue(CreeperCooking.held(player) == grenade, "Repeated press must not duplicate grenade");
         context.waitAndRun(40, () -> {
-            context.assertTrue(grenade.fuseTicks() >= 18 && grenade.fuseTicks() <= 21, "Held fuse must count down");
+            context.assertTrue(grenade.fuseTicks() >= 58 && grenade.fuseTicks() <= 61, "Held fuse must count down");
             CreeperCooking.input(player, false);
             context.assertFalse(grenade.isCooking(), "Release must throw reserved grenade even with empty hand");
-            context.assertTrue(grenade.fuseTicks() < 25, "Release must not restart fuse");
+            context.assertTrue(grenade.fuseTicks() < 65, "Release must not restart fuse");
             player.setPosition(player.getPos().add(0, 20, 0));
         });
-        context.waitAndRun(55, () -> context.assertFalse(grenade.isRemoved(), "Fuse must remain alive before deadline"));
-        context.waitAndRun(64, () -> {
+        context.waitAndRun(95, () -> context.assertFalse(grenade.isRemoved(), "Fuse must remain alive before deadline"));
+        context.waitAndRun(104, () -> {
             context.assertTrue(grenade.isRemoved(), "Grenade must explode at original deadline");
             context.assertTrue(drops(context, Items.CREEPER_HEAD) == 1, "Exactly one reusable head must remain");
             context.complete();
         });
     }
 
-    @GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 35, batchId = "fear-switch")
-    public void switchingSlotReleasesLitHeadWithoutDefusingAndNbtKeepsFuse(TestContext context) {
+    @GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 25, batchId = "fear-switch")
+    public void switchingSlotDefusesAndReturnsTheReservedHead(TestContext context) {
+        var player = player(context);
+        player.getAbilities().creativeMode = false;
+        player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.CREEPER_HEAD, 2));
+        int slot = player.getInventory().selectedSlot;
+        CreeperCooking.input(player, true);
+        var grenade = CreeperCooking.held(player);
+        context.assertTrue(grenade != null && player.getMainHandStack().getCount() == 1, "Ignition must reserve exactly one head");
+        context.waitAndRun(8, () -> player.getInventory().selectedSlot = 1);
+        context.waitAndRun(12, () -> {
+            context.assertTrue(grenade.isRemoved(), "Switching items must snuff the fuse");
+            context.assertTrue(CreeperCooking.held(player) == null, "Defuse must clear the reserved grenade");
+            context.assertTrue(player.getInventory().getStack(slot).getCount() == 2, "Defuse must return the reserved head");
+            context.assertTrue(drops(context, Items.CREEPER_HEAD) == 0, "Defuse must not drop a world item");
+            context.complete();
+        });
+    }
+
+    @GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 25, batchId = "fear-switch")
+    public void thrownFuseSurvivesReloadWithoutStaleReservation(TestContext context) {
         var player = player(context);
         CreeperCooking.input(player, true);
         var grenade = CreeperCooking.held(player);
-        context.waitAndRun(10, () -> player.getInventory().selectedSlot = 1);
-        context.waitAndRun(15, () -> {
-            context.assertFalse(grenade.isCooking(), "Slot switch must release lit head");
+        context.waitAndRun(8, () -> CreeperCooking.input(player, false));
+        context.waitAndRun(10, () -> {
+            context.assertFalse(grenade.isCooking(), "Release must throw the reserved grenade");
             var tag = new NbtCompound();
             grenade.writeNbt(tag);
             var restored = new ThrownHeadEntity(com.nakami.mcheadfunction.entity.ModEntities.THROWN_HEAD, context.getWorld());

@@ -34,6 +34,8 @@ public final class HeadRules {
 	public static final int LIGHTNING_CHARGE_TICKS = 100;
 	public static final int CREEPER_RECHARGE_TICKS = 100;
 	public static final int CREEPER_MAX_CHARGES = 2;
+	public static final int CREEPER_FUSE_TICKS = 100;
+	public static final int CREEPER_PRIME_TICKS = 10;
 	public static final int ENDERMAN_DODGE_COOLDOWN_TICKS = 40;
 	public static final int ENDERMAN_MASTERED_DODGE_COOLDOWN_TICKS = 20;
 	public static final double ENDERMAN_DODGE_DISTANCE = 8.0;
@@ -80,6 +82,19 @@ public final class HeadRules {
 
 	public static float extraPigSaturation(float foodSaturation) {
 		return Math.max(0.0F, foodSaturation);
+	}
+
+	/** 0 on press, 1 once the two ignition shakes finish. Thrown heads are already armed. */
+	public static float creeperPrimeProgress(float remainingFuse, boolean cooking) {
+		if (!cooking) return 1;
+		float elapsed = CREEPER_FUSE_TICKS - remainingFuse;
+		if (elapsed <= 0) return 0;
+		if (elapsed >= CREEPER_PRIME_TICKS) return 1;
+		return elapsed / CREEPER_PRIME_TICKS;
+	}
+
+	public static boolean creeperFuseLit(float remainingFuse, boolean cooking) {
+		return creeperPrimeProgress(remainingFuse, cooking) >= 1;
 	}
 
 	public static float pigSwallowProgress(int stuffedTicks, float delta) {

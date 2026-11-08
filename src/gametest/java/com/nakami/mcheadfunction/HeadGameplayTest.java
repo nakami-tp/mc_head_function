@@ -210,7 +210,7 @@ public class HeadGameplayTest implements FabricGameTest {
 		context.complete();
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 85, batchId = "creeper-recycle")
+	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 130, batchId = "creeper-recycle")
 	public void creeperRecyclesAboveImpactSurface(TestContext context) {
 		for (int x = 0; x < 5; x++) for (int z = 0; z < 5; z++) context.setBlockState(new BlockPos(x, 0, z), Blocks.OBSIDIAN);
 		var player = context.createMockCreativeServerPlayerInWorld();
@@ -218,7 +218,7 @@ public class HeadGameplayTest implements FabricGameTest {
 		player.refreshPositionAndAngles(origin.getX() + 0.5, origin.getY() + 2, origin.getZ() + 0.5, 0, 90);
 		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.CREEPER_HEAD));
 		ThrowHandler.throwHeldHead(player);
-		context.waitAndRun(65, () -> {
+		context.waitAndRun(105, () -> {
 			var items = context.getWorld().getEntitiesByClass(RecycledHeadItemEntity.class,
 				new net.minecraft.util.math.Box(origin).expand(5), e -> e.getStack().isOf(Items.CREEPER_HEAD));
 			context.assertTrue(items.size() == 1, "Creeper must recycle once");

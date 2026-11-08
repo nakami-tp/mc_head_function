@@ -12,6 +12,11 @@ public final class CreeperLaunch {
 		state.creeperFallProtected = true;
 		state.creeperLaunchedAt = player.getWorld().getTime();
 		player.fallDistance = 0;
+		var burst = new com.nakami.mcheadfunction.net.CreeperLaunchS2CPayload(player.getId(), player.getVelocity());
+		for (var observer : player.getServerWorld().getPlayers()) {
+			if (observer.squaredDistanceTo(player) < 64 * 64)
+				net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(observer, burst);
+		}
 	}
 
 	public static void tick(ServerPlayerEntity player) {

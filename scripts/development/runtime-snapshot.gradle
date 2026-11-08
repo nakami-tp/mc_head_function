@@ -1,0 +1,49 @@
+// Freeze local classes/resources before launching. Later compilation or cleaning
+// must not remove hit-only dependencies that a running game loads lazily.
+afterEvaluate {
+    tasks.withType(JavaExec).matching { it.name.startsWith('run') }.toList().each { game ->
+        def snapshot = new File(project.projectDir, ".gradle/runtime-snapshots/${game.name}-${UUID.randomUUID()}")
+        def replacements = [:]
+        sourceSets.each { source ->
+            source.output.files.each { output ->
+                replacements[output.absolutePath] = new File(snapshot, "${source.name}/${replacements.size()}").absolutePath
+            }
+        }
+        def rewrite = { String value ->
+            replacements.keySet().sort { -it.length() }.each { original ->
+                value = value.replace(original, replacements[original])
+            }
+            value
+        }
+        // Capture before replacing Loom's classpath, which is finalized on read
+        // during task execution. Keep its original compilation dependencies.
+        def dependencies = game.classpath.buildDependencies.getDependencies(game)
+        def originalClasspath = game.classpath.files.toList()
+        def frozenConfig = new File(snapshot, 'launch.cfg')
+        def freeze = tasks.register("snapshot${game.name.capitalize()}Runtime") {
+            dependsOn dependencies
+            if (tasks.findByName('generateDLIConfig') != null) dependsOn 'generateDLIConfig'
+            doLast {
+                replacements.each { original, destination ->
+                    new File(destination).mkdirs()
+                    if (new File(original).exists()) project.copy { from original; into destination }
+                }
+                def config = project.file('.gradle/loom-cache/launch.cfg')
+                if (config.exists()) frozenConfig.text = rewrite(config.text)
+            }
+        }
+        game.dependsOn freeze
+        game.setClasspath(project.files(originalClasspath.collect { new File(rewrite(it.absolutePath)) }))
+        def freezeArgs = { arguments -> arguments.collect { argument ->
+            def value = argument.toString()
+            value.startsWith('-Dfabric.dli.config=')
+                ? "-Dfabric.dli.config=${frozenConfig.absolutePath}" : rewrite(value)
+        } }
+        if (game.hasProperty('internalJvmArgs')) game.internalJvmArgs.set(freezeArgs(game.internalJvmArgs.get()))
+        game.jvmArgs = freezeArgs(game.jvmArgs)
+        def cleanup = tasks.register("cleanup${game.name.capitalize()}Runtime") {
+            doLast { project.delete snapshot }
+        }
+        game.finalizedBy cleanup
+    }
+}

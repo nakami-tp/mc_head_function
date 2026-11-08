@@ -12,6 +12,52 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.block.Blocks;
 
 public class HeadDepthTest implements FabricGameTest {
+	@GameTest(templateName = EMPTY_STRUCTURE)
+	public void goatDurationCanBeTunedWithGameRuleCommand(TestContext context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+		var server = context.getWorld().getServer();
+		var dispatcher = server.getCommandManager().getDispatcher();
+		var source = server.getCommandSource();
+		String command = "gamerule goatChargeDurationSeconds";
+		int original = dispatcher.execute(command, source);
+		var player = context.createMockCreativeServerPlayerInWorld();
+		player.equipStack(EquipmentSlot.HEAD, new ItemStack(HeadItems.item(HeadType.GOAT)));
+		var state = PlayerHeadAccess.state(player);
+		try {
+			context.assertTrue(original == 10, "Fresh world must default to a ten-second charge");
+			GoatCharge.toggle(player);
+			context.assertTrue(state.goatDashTicks == 200, "Default charge must last 200 ticks");
+			dispatcher.execute(command + " 20", source);
+			context.assertTrue(dispatcher.execute(command, source) == 20, "Command must report the updated seconds");
+			var savedRules = new net.minecraft.world.GameRules(new com.mojang.serialization.Dynamic<>(net.minecraft.nbt.NbtOps.INSTANCE, context.getWorld().getGameRules().toNbt()));
+			context.assertTrue(savedRules.getInt(GoatCharge.DURATION_SECONDS) == 20, "Configured time must survive world-rule serialization");
+			context.assertTrue(state.goatDashTicks == 200, "Changing duration must preserve an ongoing charge");
+			GoatCharge.stop(player); state.goatCooldown = 0;
+			GoatCharge.toggle(player);
+			context.assertTrue(state.goatDashTicks == 400 && state.goatCooldown == 560, "Next charge must use configured time plus the existing eight-second cooldown");
+			dispatcher.execute(command + " 2", source);
+			GoatCharge.stop(player); state.goatCooldown = 0;
+			GoatCharge.toggle(player);
+			for (int i = 0; i < 39; i++) state.tick(false);
+			context.assertTrue(state.goatDashTicks == 1, "Configured charge must remain active before its deadline");
+			state.tick(false);
+			context.assertTrue(state.goatDashTicks == 0, "Configured charge must expire at its deadline");
+			for (String invalid : new String[] {"0", "-1", "3601"}) {
+				boolean rejected = false;
+				try { dispatcher.execute(command + " " + invalid, source); }
+				catch (com.mojang.brigadier.exceptions.CommandSyntaxException expected) { rejected = true; }
+				context.assertTrue(rejected && dispatcher.execute(command, source) == 2, "Invalid duration must be rejected without changing the rule");
+			}
+			boolean rejected = false;
+			try { dispatcher.execute(command + " 5", source.withLevel(0)); }
+			catch (com.mojang.brigadier.exceptions.CommandSyntaxException expected) { rejected = true; }
+			context.assertTrue(rejected && dispatcher.execute(command, source) == 2, "Only operators may tune charge time");
+		} finally {
+			GoatCharge.stop(player);
+			dispatcher.execute(command + " " + original, source);
+		}
+		context.complete();
+	}
+
     @GameTest(templateName = EMPTY_STRUCTURE)
     public void goatMiningUsesHardnessAndResetsOnStop(TestContext context) {
         var player = context.createMockCreativeServerPlayerInWorld();
@@ -21,26 +67,95 @@ public class HeadDepthTest implements FabricGameTest {
         var world = context.getWorld();
         var state = PlayerHeadAccess.state(player);
         world.setBlockState(wall, Blocks.DIRT.getDefaultState());
+        world.setBlockState(wall.up(), Blocks.DIRT.getDefaultState());
         GoatCharge.toggle(player);
-        for (int i = 0; i < 4; i++) GoatCharge.tick(player);
+        for (int i = 0; i < 2; i++) GoatCharge.tick(player);
         context.assertTrue(world.getBlockState(wall).isOf(Blocks.DIRT), "Dirt should show progress before breaking");
         GoatCharge.tick(player);
-        context.assertTrue(world.getBlockState(wall).isAir(), "Dirt should break after five contact ticks");
+        context.assertTrue(world.getBlockState(wall).isAir(), "Dirt should break after three contact ticks");
         world.setBlockState(wall, Blocks.STONE.getDefaultState());
-        for (int i = 0; i < 5; i++) GoatCharge.tick(player);
+        world.setBlockState(wall.up(), Blocks.STONE.getDefaultState());
+        for (int i = 0; i < 3; i++) GoatCharge.tick(player);
         context.assertTrue(world.getBlockState(wall).isOf(Blocks.STONE), "Stone must take longer than dirt");
         GoatCharge.stop(player);
         state.goatCooldown = 0;
         GoatCharge.toggle(player);
-        for (int i = 0; i < 10; i++) GoatCharge.tick(player);
+        for (int i = 0; i < 4; i++) GoatCharge.tick(player);
         context.assertTrue(world.getBlockState(wall).isOf(Blocks.STONE), "Stopping must discard old progress");
-        for (int i = 0; i < 5; i++) GoatCharge.tick(player);
-        context.assertTrue(world.getBlockState(wall).isAir(), "Stone should break after fifteen uninterrupted ticks");
+        for (int i = 0; i < 8; i++) GoatCharge.tick(player);
+        context.assertTrue(world.getBlockState(wall).isAir(), "Stone should break after eight uninterrupted ticks");
         world.setBlockState(wall, Blocks.BEDROCK.getDefaultState());
+        world.setBlockState(wall.up(), Blocks.BEDROCK.getDefaultState());
         GoatCharge.tick(player);
         context.assertTrue(world.getBlockState(wall).isOf(Blocks.BEDROCK) && state.goatDashTicks == 0, "Bedrock must stop charge without breaking");
         context.complete();
     }
+
+	@GameTest(templateName = EMPTY_STRUCTURE)
+	public void goatChargeCrushesBrittleBlocksWithoutSlowing(TestContext context) {
+		var player = context.createMockCreativeServerPlayerInWorld();
+		player.equipStack(EquipmentSlot.HEAD, new ItemStack(HeadItems.item(HeadType.GOAT)));
+		var wall = context.getAbsolutePos(new BlockPos(2, 2, 3));
+		player.refreshPositionAndAngles(wall.getX() + 0.5, wall.getY(), wall.getZ() - 0.31, 0, 0);
+		var world = context.getWorld();
+		world.setBlockState(wall, Blocks.OAK_LEAVES.getDefaultState());
+		world.setBlockState(wall.up(), Blocks.GLASS.getDefaultState());
+		GoatCharge.toggle(player);
+		GoatCharge.tick(player);
+		context.assertTrue(world.getBlockState(wall).isAir() && world.getBlockState(wall.up()).isAir(), "Leaves and glass must shatter on contact");
+		context.assertTrue(Math.abs(player.getVelocity().horizontalLength() - PlayerHeadAccess.state(player).goatSpeed) < 0.0001, "Crushing brittle blocks must keep charge speed");
+		world.setBlockState(wall, Blocks.OAK_DOOR.getDefaultState().with(net.minecraft.block.DoorBlock.HALF, net.minecraft.block.enums.DoubleBlockHalf.LOWER));
+		world.setBlockState(wall.up(), Blocks.OAK_DOOR.getDefaultState().with(net.minecraft.block.DoorBlock.HALF, net.minecraft.block.enums.DoubleBlockHalf.UPPER));
+		GoatCharge.tick(player);
+		context.assertTrue(world.getBlockState(wall).isAir() && world.getBlockState(wall.up()).isAir(), "Wooden doors must shatter on contact");
+		world.setBlockState(wall, Blocks.OAK_FENCE_GATE.getDefaultState());
+		world.setBlockState(wall.up(), Blocks.BAMBOO.getDefaultState());
+		GoatCharge.tick(player);
+		context.assertTrue(world.getBlockState(wall).isAir() && world.getBlockState(wall.up()).isAir(), "Fence gates and bamboo must shatter on contact");
+		context.assertTrue(PlayerHeadAccess.state(player).goatDashTicks > 0, "Brittle blocks must not stop the charge");
+		context.complete();
+	}
+
+	@GameTest(templateName = EMPTY_STRUCTURE)
+	public void goatChargeStepsUpOneBlockWithoutMining(TestContext context) {
+		var player = context.createMockCreativeServerPlayerInWorld();
+		player.equipStack(EquipmentSlot.HEAD, new ItemStack(HeadItems.item(HeadType.GOAT)));
+		var step = context.getAbsolutePos(new BlockPos(2, 2, 3));
+		player.refreshPositionAndAngles(step.getX() + 0.5, step.getY(), step.getZ() - 0.31, 0, 0);
+		var world = context.getWorld();
+		world.setBlockState(step, Blocks.DIRT.getDefaultState());
+		GoatCharge.toggle(player);
+		GoatCharge.tick(player);
+		context.assertTrue(world.getBlockState(step).isOf(Blocks.DIRT), "A one-block step must not be mined");
+		context.assertTrue(player.getStepHeight() >= 1.25F - 0.001F, "Charge must raise step height to at least 1.25");
+		context.assertTrue(Math.abs(player.getVelocity().horizontalLength() - PlayerHeadAccess.state(player).goatSpeed) < 0.0001, "Stepping up must keep charge speed");
+		GoatCharge.stop(player);
+		context.assertTrue(player.getStepHeight() < 1.0F, "Stopping must restore normal step height");
+		context.complete();
+	}
+
+	@GameTest(templateName = EMPTY_STRUCTURE)
+	public void goatChargeDriftsWhenSneakSteering(TestContext context) {
+		var player = context.createMockCreativeServerPlayerInWorld();
+		player.equipStack(EquipmentSlot.HEAD, new ItemStack(HeadItems.item(HeadType.GOAT)));
+		player.setYaw(0);
+		GoatCharge.toggle(player);
+		GoatCharge.steer(player, 1, true);
+		GoatCharge.tick(player);
+		var state = PlayerHeadAccess.state(player);
+		context.assertTrue(Math.abs(state.goatHeading - 6F) < 0.001, "Sneak steering must turn 6 degrees per tick");
+		context.assertTrue(Math.abs(player.getVelocity().horizontalLength() - state.goatSpeed * 0.7) < 0.0001, "Drifting must cost 30% speed");
+		GoatCharge.steer(player, 1, false);
+		GoatCharge.tick(player);
+		context.assertTrue(Math.abs(state.goatHeading - 7.8F) < 0.001, "Releasing sneak must restore the 1.8 degree turn");
+		context.assertTrue(Math.abs(player.getVelocity().horizontalLength() - state.goatSpeed) < 0.0001, "Releasing sneak must restore charge speed");
+		state.mastery.put(HeadType.GOAT, 1000);
+		GoatCharge.steer(player, 1, true);
+		float before = state.goatHeading;
+		GoatCharge.tick(player);
+		context.assertTrue(Math.abs(state.goatHeading - before - 8F) < 0.001, "Mastery drift must turn 8 degrees per tick");
+		context.complete();
+	}
 
 	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 30)
 	public void stunBlocksRabbitJumpAndHeldFlame(TestContext context) {
@@ -64,7 +179,7 @@ public class HeadDepthTest implements FabricGameTest {
 	}
 
 	@GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 40)
-	public void goatTurnIsLimitedAndSecondPressStops(TestContext context) {
+	public void goatTurnIsLimitedAndSkillCannotStop(TestContext context) {
 		var player = context.createMockCreativeServerPlayerInWorld();
 		player.equipStack(EquipmentSlot.HEAD, new ItemStack(HeadItems.item(HeadType.GOAT)));
 		player.setYaw(0);
@@ -93,13 +208,16 @@ public class HeadDepthTest implements FabricGameTest {
 		GoatCharge.steer(player, 1);
 		GoatCharge.tick(player);
 		context.assertTrue(Math.abs(state.goatHeading - before - 3) < 0.001, "Mastery must preserve faster keyboard steering");
+		int remaining = state.goatDashTicks;
 		double speedBeforeStop = player.getVelocity().horizontalLength();
 		SkillHandler.onSkill(player, false);
 		SkillHandler.onSkill(player, true);
-		context.assertTrue(state.goatDashTicks == 0 && Math.abs(player.getVelocity().horizontalLength() - speedBeforeStop * 0.2) < 0.0001, "Second R must brake the charge");
+		context.assertTrue(state.goatDashTicks == remaining && Math.abs(player.getVelocity().horizontalLength() - speedBeforeStop) < 0.0001, "Skill key must not stop or brake an active charge");
+		GoatCharge.stop(player);
+		context.assertTrue(state.goatDashTicks == 0 && Math.abs(player.getVelocity().horizontalLength() - speedBeforeStop * 0.2) < 0.0001, "Forced stop must still brake the charge");
 		SkillHandler.onSkill(player, false);
 		SkillHandler.onSkill(player, true);
-		context.assertTrue(state.goatDashTicks == 0 && Math.abs(player.getVelocity().horizontalLength() - speedBeforeStop * 0.2) < 0.0001, "Cooldown must prevent restarting immediately");
+		context.assertTrue(state.goatDashTicks == 0, "Cooldown must prevent restarting immediately");
 		context.complete();
 	}
 
@@ -229,5 +347,90 @@ public class HeadDepthTest implements FabricGameTest {
 			context.assertFalse(GoatCharge.isStunned(cow), "Stun must expire");
 			context.complete();
 		});
+	}
+
+	@GameTest(templateName = EMPTY_STRUCTURE)
+	public void goatDriftSlidesOutsideAndRegainsGrip(TestContext context) {
+		var player = context.createMockCreativeServerPlayerInWorld();
+		player.equipStack(EquipmentSlot.HEAD, new ItemStack(HeadItems.item(HeadType.GOAT)));
+		player.setYaw(0);
+		GoatCharge.toggle(player);
+		for (int i = 0; i < 10; i++) {
+			GoatCharge.steer(player, 1, true);
+			GoatCharge.tick(player);
+		}
+		double travel = Math.toDegrees(Math.atan2(-player.getVelocity().x, player.getVelocity().z));
+		context.assertTrue(player.getYaw() - travel > 15 && player.getYaw() - travel < 35, "Drift must visibly slide outside the facing direction, got slip=" + (player.getYaw() - travel));
+		context.assertTrue(Math.abs(player.getVelocity().horizontalLength() - PlayerHeadAccess.state(player).goatSpeed * .7) < .0001, "Sliding must retain the existing 30 percent speed cost");
+		GoatCharge.steer(player, 0, false);
+		for (int i = 0; i < 8; i++) GoatCharge.tick(player);
+		travel = Math.toDegrees(Math.atan2(-player.getVelocity().x, player.getVelocity().z));
+		context.assertTrue(Math.abs(player.getYaw() - travel) < 2, "Releasing drift must smoothly regain forward grip");
+		GoatCharge.stop(player);
+		context.complete();
+	}
+
+	@GameTest(templateName = EMPTY_STRUCTURE)
+	public void goatChargeHitsMonsterOnceAndConsumesLanding(TestContext context) {
+		var player = context.createMockCreativeServerPlayerInWorld();
+		var pos = context.getAbsolutePos(new BlockPos(2, 2, 2));
+		player.refreshPositionAndAngles(pos.getX() + .5, pos.getY(), pos.getZ() + .5, 0, 0);
+		player.equipStack(EquipmentSlot.HEAD, new ItemStack(HeadItems.item(HeadType.GOAT)));
+		var target = context.spawnMob(EntityType.CREEPER, 2, 2, 3);
+		target.setAiDisabled(true);
+		GoatCharge.toggle(player);
+		GoatCharge.tick(player);
+		context.assertTrue(target.getHealth() == 16, "Ram must deal exactly four damage to a monster");
+		context.assertTrue(target.getVelocity().y == .8 && !target.isOnGround(), "Ram must queue landing after launching the monster");
+		GoatCharge.tick(player);
+		context.assertTrue(PlayerHeadAccess.state(player).goatHit.size() == 1 && target.getHealth() == 16, "Same charge must hit each monster only once");
+		GoatCharge.tickTarget(target);
+		context.assertFalse(GoatCharge.isStunned(target), "Airborne monster must not be stunned yet");
+		target.setOnGround(true);
+		GoatCharge.tickTarget(target);
+		context.assertTrue(GoatCharge.isStunned(target), "Landing must apply the queued stun");
+		target.removeStatusEffect(GoatCharge.STUN);
+		GoatCharge.tickTarget(target);
+		context.assertFalse(GoatCharge.isStunned(target), "Consumed landing must not reapply stun");
+		GoatCharge.stop(player);
+		context.complete();
+	}
+
+	@GameTest(templateName = EMPTY_STRUCTURE)
+	public void goatChargeExtendsDurationOnEachLivingHit(TestContext context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+		var server = context.getWorld().getServer();
+		var dispatcher = server.getCommandManager().getDispatcher();
+		var source = server.getCommandSource();
+		String command = "gamerule goatChargeDurationSeconds";
+		int original = dispatcher.execute(command, source);
+		var player = context.createMockCreativeServerPlayerInWorld();
+		var pos = context.getAbsolutePos(new BlockPos(2, 2, 2));
+		player.refreshPositionAndAngles(pos.getX() + .5, pos.getY(), pos.getZ() + .5, 0, 0);
+		player.equipStack(EquipmentSlot.HEAD, new ItemStack(HeadItems.item(HeadType.GOAT)));
+		var state = PlayerHeadAccess.state(player);
+		try {
+			dispatcher.execute(command + " 1", source);
+			var first = context.spawnMob(EntityType.CREEPER, 2, 2, 3);
+			first.setAiDisabled(true);
+			GoatCharge.toggle(player);
+			context.assertTrue(state.goatDashTicks == 20, "Configured charge must start at one second");
+			GoatCharge.tick(player);
+			context.assertTrue(first.getHealth() == 16, "Ram must hit the first living target");
+			context.assertTrue(state.goatDashTicks == 100 && state.goatCooldown == 260, "Each living hit must add four seconds to charge and cooldown");
+			GoatCharge.tick(player);
+			context.assertTrue(state.goatDashTicks == 100 && state.goatHit.size() == 1, "The same target must not extend the charge again");
+			var second = context.spawnMob(EntityType.COW, 2, 2, 3);
+			second.setAiDisabled(true);
+			GoatCharge.tick(player);
+			context.assertTrue(state.goatHit.size() == 2 && state.goatDashTicks == 180 && state.goatCooldown == 340, "A second living hit must add another four seconds");
+			for (int i = 0; i < 20; i++) state.tick(false);
+			context.assertTrue(state.goatDashTicks == 160, "Charge must still be active after the original one-second limit");
+			for (int i = 0; i < 160; i++) state.tick(false);
+			context.assertTrue(state.goatDashTicks == 0, "Extended charge must expire after the added time");
+		} finally {
+			GoatCharge.stop(player);
+			dispatcher.execute(command + " " + original, source);
+		}
+		context.complete();
 	}
 }
