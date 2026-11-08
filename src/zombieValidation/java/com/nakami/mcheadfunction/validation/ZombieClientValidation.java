@@ -44,6 +44,10 @@ public final class ZombieClientValidation implements ClientModInitializer {
     private final BlockPos slowBlock = new BlockPos(6, 101, 2), fastBlock = new BlockPos(8, 101, 2);
     private final long started = System.nanoTime();
     @Override public void onInitializeClient() {
+        if ("true".equals(System.getenv("MC_HEAD_ZOMBIE_FRENZY_ONLY"))) {
+            new ZombieFrenzyValidation().onInitializeClient();
+            return;
+        }
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
         net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.register((player, world, hand, target, hit) -> {
             if (!world.isClient() && target.getId() == cowId) serverAttacks++;
@@ -373,6 +377,7 @@ public final class ZombieClientValidation implements ClientModInitializer {
         } catch (Throwable error) { finish(client, "FAIL " + error); }
     }
     private void pressAttack(MinecraftClient client) {
+        org.lwjgl.glfw.GLFW.glfwFocusWindow(client.getWindow().getHandle());
         client.mouse.lockCursor();
         client.options.attackKey.setPressed(true);
         net.minecraft.client.option.KeyBinding.onKeyPressed(net.minecraft.client.util.InputUtil.fromTranslationKey(client.options.attackKey.getBoundKeyTranslationKey()));

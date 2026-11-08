@@ -1,0 +1,9 @@
+{
+  "sources": [
+    {
+      "type": "single",
+      "resource": "minecraft:mob_effect/strength",
+      "sprite": "mc_head_function:zombie_frenzy"
+    }
+  ]
+}

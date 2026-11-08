@@ -187,8 +187,7 @@ public final class WearHandler {
 		if (worn == HeadType.ZOMBIE || worn == HeadType.PIG) HeadMastery.practice(player, worn);
 		if (worn == HeadType.ZOMBIE) {
 			if (stack.isOf(Items.ROTTEN_FLESH)) {
-				player.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, 200, 0));
-				player.addStatusEffect(new StatusEffectInstance(StatusEffects.HASTE, 200, 0));
+				ZombieBlood.eatFlesh(player);
 			} else if (food != null) {
 				player.addStatusEffect(new StatusEffectInstance(StatusEffects.POISON, 60, 0));
 			}

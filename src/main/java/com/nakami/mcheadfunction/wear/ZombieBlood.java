@@ -10,6 +10,12 @@ import net.minecraft.entity.attribute.EntityAttribute;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.effect.StatusEffect;
+import net.minecraft.entity.effect.StatusEffectCategory;
+import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.Registry;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundEvents;
@@ -21,7 +27,33 @@ public final class ZombieBlood {
     private static final Identifier ATTACK_SPEED = Identifier.of("mc_head_function", "zombie_attack_speed");
     private static final Identifier SPEED = Identifier.of("mc_head_function", "zombie_speed");
     public static final int DRAIN_INTERVAL = 10;
+    public static final int FLESH_BUFF_TICKS = 1000;
+    // A separate vanilla-managed effect prevents ordinary Strength/Haste from granting immunity.
+    public static final RegistryEntry<StatusEffect> FRENZY = Registry.registerReference(Registries.STATUS_EFFECT,
+        Identifier.of("mc_head_function", "zombie_frenzy"), new StatusEffect(StatusEffectCategory.BENEFICIAL, 0x537735) { });
     private ZombieBlood() { }
+
+    public static void register() { }
+
+    public static void eatFlesh(PlayerEntity player) {
+        player.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, FLESH_BUFF_TICKS, 0));
+        player.addStatusEffect(new StatusEffectInstance(StatusEffects.HASTE, FLESH_BUFF_TICKS, 0));
+        player.addStatusEffect(new StatusEffectInstance(FRENZY, FLESH_BUFF_TICKS, 0, false, false, false));
+    }
+
+    public static boolean frenzied(PlayerEntity player) { return active(player) && player.hasStatusEffect(FRENZY); }
+    public static boolean frenzyFists(PlayerEntity player) { return frenzied(player) && unarmed(player); }
+
+    /** Replace vanilla/sprint knockback after the complete attack; never stack upward impulses. */
+    public static void juggle(PlayerEntity player, LivingEntity victim) {
+        if (!victim.isAlive() || HeadLookups.isBoss(victim)) return;
+        double scale = 1 - victim.getAttributeValue(EntityAttributes.GENERIC_KNOCKBACK_RESISTANCE);
+        if (scale <= 0) return;
+        var direction = player.getRotationVec(1).multiply(1, 0, 1).normalize();
+        double lift = victim.getY() < player.getY() + 0.45 ? 0.12 * scale : Math.min(0, victim.getVelocity().y);
+        victim.setVelocity(direction.x * 0.24 * scale, lift, direction.z * 0.24 * scale);
+        victim.velocityModified = true;
+    }
 
     public static boolean active(PlayerEntity player) {
         boolean survival = player instanceof ServerPlayerEntity server
@@ -72,7 +104,7 @@ public final class ZombieBlood {
         if (!unarmed(player) || !melee || damage <= 0) return;
         float power = strength(player);
         float before = player.getHealth();
-        player.heal(damage * lifestealRate(player) + (killed ? 6 : 0));
+        if (!frenzied(player)) player.heal(damage * lifestealRate(player) + (killed ? 6 : 0));
         float healed = player.getHealth() - before;
         HeadMastery.practice(player, HeadType.ZOMBIE);
         var payload = new ZombieBiteS2CPayload(player.getId(), victim.getX(), victim.getBodyY(0.6), victim.getZ(), power, healed, killed);

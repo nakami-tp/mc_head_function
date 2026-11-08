@@ -2,12 +2,14 @@ package com.nakami.mcheadfunction.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.nakami.mcheadfunction.behead.BeheadingHandler;
 import com.nakami.mcheadfunction.head.HeadItems;
 import com.nakami.mcheadfunction.head.PigStuffedAccess;
 import com.nakami.mcheadfunction.head.PlayerHeadAccess;
 import com.nakami.mcheadfunction.head.PlayerHeadState;
 import com.nakami.mcheadfunction.wear.WearHandler;
+import com.nakami.mcheadfunction.wear.ZombieBlood;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.data.DataTracker;
@@ -23,6 +25,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(PlayerEntity.class)
 public abstract class PlayerEntityMixin implements PlayerHeadAccess, PigStuffedAccess, com.nakami.mcheadfunction.head.GlovePunchAccess {
@@ -77,6 +80,39 @@ public abstract class PlayerEntityMixin implements PlayerHeadAccess, PigStuffedA
 		mhf$state.read(nbt);
 		mhf$setStuffedTicks(mhf$state.stuffedTicks);
 	}
+
+    @Inject(method = "damage", at = @At("HEAD"), cancellable = true)
+    private void mhf$frenzyProtection(net.minecraft.entity.damage.DamageSource source, float amount,
+            CallbackInfoReturnable<Boolean> cir) {
+        if (ZombieBlood.frenzied((PlayerEntity) (Object) this)) cir.setReturnValue(false);
+    }
+
+    @WrapOperation(method = "attack", at = @At(value = "INVOKE",
+        target = "Lnet/minecraft/entity/Entity;damage(Lnet/minecraft/entity/damage/DamageSource;F)Z"))
+    private boolean mhf$frenzyDamage(Entity target, net.minecraft.entity.damage.DamageSource source,
+            float amount, Operation<Boolean> original) {
+        PlayerEntity self = (PlayerEntity) (Object) this;
+        if (self.getWorld().isClient() || !ZombieBlood.frenzyFists(self)
+                || !(target instanceof LivingEntity living)) return original.call(target, source, amount);
+        int previous = living.timeUntilRegen;
+        boolean hit = false;
+        living.timeUntilRegen = 0;
+        try {
+            hit = original.call(target, source, amount);
+            return hit;
+        } finally {
+            if (!hit) living.timeUntilRegen = previous;
+        }
+    }
+
+    @WrapMethod(method = "attack")
+    private void mhf$frenzyJuggle(Entity target, Operation<Void> original) {
+        PlayerEntity self = (PlayerEntity) (Object) this;
+        float before = target instanceof LivingEntity living ? living.getHealth() : 0;
+        original.call(target);
+        if (!self.getWorld().isClient() && ZombieBlood.frenzyFists(self)
+                && target instanceof LivingEntity living && living.getHealth() < before) ZombieBlood.juggle(self, living);
+    }
 
 	@Inject(method = "attack", at = @At("HEAD"), cancellable = true)
 	private void mhf$attack(Entity target, CallbackInfo ci) {

@@ -14,6 +14,8 @@ allprojects {
 }
 allprojects {
     afterEvaluate {
+        def validationRunDir = System.getenv('MC_HEAD_ZOMBIE_FRENZY_ONLY') == 'true'
+            ? 'build/zombie-frenzy-validation' : 'build/zombie-client-validation'
         sourceSets {
             zombieValidation {
                 compileClasspath += sourceSets.client.compileClasspath + sourceSets.client.output + sourceSets.main.output
@@ -26,14 +28,14 @@ allprojects {
                 zombieValidation {
                     client()
                     source sourceSets.zombieValidation
-                    runDir 'build/zombie-client-validation'
+                    runDir validationRunDir
                 }
             }
         }
         tasks.named('runZombieValidation').configure {
-            doFirst { project.delete project.file('build/zombie-client-validation/result.txt'), project.file('build/zombie-client-validation/screenshots') }
+            doFirst { project.delete project.file("${validationRunDir}/result.txt"), project.file("${validationRunDir}/screenshots") }
             doLast {
-                def result = project.file('build/zombie-client-validation/result.txt')
+                def result = project.file("${validationRunDir}/result.txt")
                 if (!result.exists() || !result.text.startsWith('PASS ')) {
                     throw new GradleException('Zombie client validation failed; see result.txt and logs.')
                 }

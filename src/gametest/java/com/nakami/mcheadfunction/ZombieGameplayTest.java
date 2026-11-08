@@ -215,6 +215,92 @@ public class ZombieGameplayTest implements FabricGameTest {
         c.complete();
     }
     @GameTest(templateName = EMPTY_STRUCTURE)
+    public void fleshProtectsForFiftySecondsAndMilkEndsProtection(TestContext c) {
+        var p = wearer(c); p.setHealth(1);
+        new ItemStack(Items.ROTTEN_FLESH).finishUsing(c.getWorld(), p);
+        near(c, p.getStatusEffect(StatusEffects.STRENGTH).getDuration(), 1000, "Strength lasts five times longer");
+        near(c, p.getStatusEffect(StatusEffects.HASTE).getDuration(), 1000, "Haste lasts five times longer");
+        for (var source : new net.minecraft.entity.damage.DamageSource[]{
+                p.getDamageSources().generic(), p.getDamageSources().starve(), p.getDamageSources().fall(),
+                p.getDamageSources().lava(), p.getDamageSources().outOfWorld()}) {
+            c.assertFalse(p.damage(source, 100), "Flesh frenzy must block " + source.getName());
+            near(c, p.getHealth(), 1, "Protection keeps low health");
+        }
+        for (int i = 0; i < 999; i++) { p.tick(); p.playerTick(); }
+        c.assertFalse(p.damage(p.getDamageSources().generic(), 1), "Protection lasts through penultimate tick");
+        p.tick(); p.playerTick();
+        c.assertTrue(p.damage(p.getDamageSources().generic(), 1), "Damage returns at expiry");
+        c.assertFalse(p.isAlive(), "Low health is vulnerable again at expiry");
+        var milk = wearer(c); milk.setHealth(4);
+        new ItemStack(Items.ROTTEN_FLESH).finishUsing(c.getWorld(), milk);
+        new ItemStack(Items.MILK_BUCKET).finishUsing(c.getWorld(), milk);
+        c.assertTrue(milk.damage(milk.getDamageSources().generic(), 1), "Milk clears flesh protection");
+        var potion = wearer(c);
+        potion.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, 1000));
+        potion.addStatusEffect(new StatusEffectInstance(StatusEffects.HASTE, 1000));
+        c.assertTrue(potion.damage(potion.getDamageSources().generic(), 1), "Ordinary potion buffs must not protect");
+        c.complete();
+    }
+    @GameTest(templateName = EMPTY_STRUCTURE)
+    public void fleshFistsJuggleAtHighFrequencyWithoutHealing(TestContext c) {
+        var p = wearer(c); p.setHealth(1); p.setOnGround(true);
+        new ItemStack(Items.ROTTEN_FLESH).finishUsing(c.getWorld(), p);
+        for (int z = 1; z <= 14; z++) {
+            c.setBlockState(new net.minecraft.util.math.BlockPos(2, 1, z), net.minecraft.block.Blocks.STONE);
+            for (int y = 2; y <= 5; y++) c.setBlockState(new net.minecraft.util.math.BlockPos(2, y, z), net.minecraft.block.Blocks.AIR);
+        }
+        var target = c.spawnMob(EntityType.HUSK, 2, 2, 2);
+        target.getAttributeInstance(EntityAttributes.GENERIC_MOVEMENT_SPEED).setBaseValue(0);
+        target.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH).setBaseValue(1000); target.setHealth(1000);
+        target.setOnGround(true);
+        double floor = target.getY(), start = target.getZ(), peak = floor;
+        for (int hit = 0; hit < 15; hit++) {
+            p.refreshPositionAndAngles(target.getX(), floor, target.getZ() - 1.8, 0, 0);
+            p.setOnGround(true);
+            float before = target.getHealth();
+            p.attack(target);
+            c.assertTrue(target.getHealth() < before, "Every cooled fist must hurt, including during vanilla immunity: " + hit);
+            near(c, p.getHealth(), 1, "Frenzy does not leech");
+            c.assertTrue(target.getVelocity().z > 0 && target.getVelocity().horizontalLength() <= 0.3,
+                "Fists push forward at a bounded speed");
+            for (int t = 0; t < 2; t++) {
+                p.tick(); p.playerTick(); target.tick(); peak = Math.max(peak, target.getY());
+            }
+        }
+        c.assertTrue(target.getZ() > start + 2, "Repeated hits carry the mob forward: " + (target.getZ() - start));
+        c.assertTrue(peak > floor + 0.1 && peak < floor + 0.9, "Repeated hits bounce low, peak=" + (peak - floor));
+        target.setHealth(1); p.attack(target);
+        near(c, p.getHealth(), 1, "Frenzy kills must not heal either");
+        p.equipStack(EquipmentSlot.HEAD, ItemStack.EMPTY);
+        c.assertTrue(p.damage(p.getDamageSources().generic(), 1), "Unequip immediately ends protection");
+        c.complete();
+    }
+    @GameTest(templateName = EMPTY_STRUCTURE)
+    public void fleshRapidDamageDoesNotLeakToWeaponsOrOtherAttackers(TestContext c) {
+        var p = wearer(c); p.setHealth(4);
+        new ItemStack(Items.ROTTEN_FLESH).finishUsing(c.getWorld(), p);
+        var target = c.spawnMob(EntityType.HUSK, 2, 2, 2); target.setAiDisabled(true);
+        target.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH).setBaseValue(1000); target.setHealth(1000);
+        p.attack(target);
+        float afterFist = target.getHealth();
+        var other = wearer(c);
+        c.assertFalse(target.damage(target.getDamageSources().playerAttack(other), 1), "Other attackers retain vanilla immunity");
+        p.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.STICK));
+        p.attack(target);
+        near(c, target.getHealth(), afterFist, "Weapon cannot bypass victim immunity");
+        c.assertFalse(p.damage(p.getDamageSources().generic(), 10), "Holding an item keeps frenzy protection");
+        p.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+        target.setInvulnerable(true); target.timeUntilRegen = 17;
+        p.attack(target);
+        near(c, target.timeUntilRegen, 17, "Rejected frenzy hit preserves previous immunity");
+        near(c, target.getHealth(), afterFist, "Invulnerable target cannot be damaged");
+        p.equipStack(EquipmentSlot.HEAD, ItemStack.EMPTY);
+        c.assertTrue(p.damage(p.getDamageSources().generic(), 1), "Unequip ends protection immediately");
+        p.equipStack(EquipmentSlot.HEAD, new ItemStack(Items.ZOMBIE_HEAD)); p.timeUntilRegen = 0;
+        c.assertFalse(p.damage(p.getDamageSources().generic(), 10), "Re-equip uses remaining frenzy");
+        c.complete();
+    }
+    @GameTest(templateName = EMPTY_STRUCTURE)
     public void rottenFleshHasBuffsButNoNutritionOrHealing(TestContext c) {
         var p = wearer(c); p.setHealth(10);
         p.getHungerManager().setFoodLevel(8); p.getHungerManager().setSaturationLevel(3);

@@ -62,8 +62,8 @@ public class HeadGameplayTest implements FabricGameTest {
 			context.assertFalse(player.hasStatusEffect(StatusEffects.HUNGER), "Bite " + bite + " must not apply vanilla hunger");
 			context.assertFalse(player.hasStatusEffect(StatusEffects.POISON), "Repeated rotten flesh must not poison");
 			context.assertTrue(player.getHealth() == 10, "Flesh must not directly heal");
-			context.assertTrue(player.getStatusEffect(StatusEffects.STRENGTH).getDuration() == 200, "Strength must refresh");
-			context.assertTrue(player.getStatusEffect(StatusEffects.HASTE).getDuration() == 200, "Haste must refresh");
+			context.assertTrue(player.getStatusEffect(StatusEffects.STRENGTH).getDuration() == 1000, "Strength must refresh to fifty seconds");
+			context.assertTrue(player.getStatusEffect(StatusEffects.HASTE).getDuration() == 1000, "Haste must refresh to fifty seconds");
 			player.getStatusEffect(StatusEffects.STRENGTH).update(player, () -> { });
 			player.getStatusEffect(StatusEffects.HASTE).update(player, () -> { });
 		}

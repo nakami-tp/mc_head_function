@@ -25,6 +25,7 @@ public class McHeadFunction implements ModInitializer {
 		ModEntities.register();
 		ModNetworking.register();
 		WearHandler.register();
+		com.nakami.mcheadfunction.wear.ZombieBlood.register();
 		com.nakami.mcheadfunction.wear.FrogProjectile.register();
 		com.nakami.mcheadfunction.wear.PigSwallow.register();
 		com.nakami.mcheadfunction.blaze.BlazeFire.register();
